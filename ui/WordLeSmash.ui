@@ -1,0 +1,1565 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Word Le Smash</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0">
+    <property name="spacing">
+     <number>10</number>
+    </property>
+    <property name="sizeConstraint">
+     <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
+    </property>
+    <property name="bottomMargin">
+     <number>9</number>
+    </property>
+    <item>
+     <widget class="QLabel" name="titleLabel">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>50</height>
+       </size>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">font-size: 36px; font-weight: bold; color: white; font-family: Arial;</string>
+      </property>
+      <property name="text">
+       <string>Word Le SMASH!</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QSplitter" name="solutionDisplaySplitter">
+      <property name="orientation">
+       <enum>Qt::Orientation::Horizontal</enum>
+      </property>
+      <widget class="QSplitter" name="suggestionSplitter">
+       <property name="orientation">
+        <enum>Qt::Orientation::Vertical</enum>
+       </property>
+       <widget class="QFrame" name="strategicFrame">
+        <property name="maximumSize">
+         <size>
+          <width>200</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::Shape::StyledPanel</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Shadow::Plain</enum>
+        </property>
+        <property name="lineWidth">
+         <number>1</number>
+        </property>
+        <property name="midLineWidth">
+         <number>0</number>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_3">
+         <item>
+          <widget class="QLabel" name="strategicLabel">
+           <property name="layoutDirection">
+            <enum>Qt::LayoutDirection::LeftToRight</enum>
+           </property>
+           <property name="text">
+            <string>Strategic Picks</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QListWidget" name="strategicListWidget">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <family>Liberation Mono</family>
+             <pointsize>18</pointsize>
+            </font>
+           </property>
+           <property name="focusPolicy">
+            <enum>Qt::FocusPolicy::NoFocus</enum>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Shape::Box</enum>
+           </property>
+           <property name="frameShadow">
+            <enum>QFrame::Shadow::Sunken</enum>
+           </property>
+           <property name="lineWidth">
+            <number>1</number>
+           </property>
+           <property name="midLineWidth">
+            <number>1</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QFrame" name="solutionFrame">
+        <property name="maximumSize">
+         <size>
+          <width>200</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::Shape::StyledPanel</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Shadow::Plain</enum>
+        </property>
+        <property name="midLineWidth">
+         <number>2</number>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_2">
+         <item>
+          <widget class="QLabel" name="solutionLabel">
+           <property name="frameShape">
+            <enum>QFrame::Shape::NoFrame</enum>
+           </property>
+           <property name="lineWidth">
+            <number>1</number>
+           </property>
+           <property name="text">
+            <string>Valid Solutions</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QListWidget" name="solutionListWidget">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <family>Liberation Mono</family>
+             <pointsize>18</pointsize>
+            </font>
+           </property>
+           <property name="focusPolicy">
+            <enum>Qt::FocusPolicy::NoFocus</enum>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Shape::Box</enum>
+           </property>
+           <property name="midLineWidth">
+            <number>1</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+      <widget class="WordTableWidget" name="guessDisplay">
+       <property name="frameShape">
+        <enum>QFrame::Shape::NoFrame</enum>
+       </property>
+       <property name="frameShadow">
+        <enum>QFrame::Shadow::Plain</enum>
+       </property>
+       <property name="lineWidth">
+        <number>1</number>
+       </property>
+       <property name="rowCount">
+        <number>1</number>
+       </property>
+       <property name="columnCount">
+        <number>5</number>
+       </property>
+       <attribute name="horizontalHeaderVisible">
+        <bool>false</bool>
+       </attribute>
+       <attribute name="horizontalHeaderMinimumSectionSize">
+        <number>50</number>
+       </attribute>
+       <attribute name="horizontalHeaderDefaultSectionSize">
+        <number>50</number>
+       </attribute>
+       <attribute name="verticalHeaderVisible">
+        <bool>false</bool>
+       </attribute>
+       <attribute name="verticalHeaderMinimumSectionSize">
+        <number>50</number>
+       </attribute>
+       <attribute name="verticalHeaderDefaultSectionSize">
+        <number>50</number>
+       </attribute>
+       <row>
+        <property name="text">
+         <string>New Row</string>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>20</pointsize>
+         </font>
+        </property>
+       </row>
+       <column>
+        <property name="text">
+         <string>A</string>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>20</pointsize>
+         </font>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>B</string>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>20</pointsize>
+         </font>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>C</string>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>20</pointsize>
+         </font>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>D</string>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>20</pointsize>
+         </font>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>E</string>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>20</pointsize>
+         </font>
+        </property>
+       </column>
+      </widget>
+     </widget>
+    </item>
+    <item>
+     <widget class="QFrame" name="keyboardFrame">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::Shape::NoFrame</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Shadow::Plain</enum>
+      </property>
+      <property name="lineWidth">
+       <number>0</number>
+      </property>
+      <layout class="QVBoxLayout" name="keyboardLayout">
+       <property name="spacing">
+        <number>6</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QFrame" name="keyboardRow1_2">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="lineWidth">
+          <number>0</number>
+         </property>
+         <layout class="QHBoxLayout" name="keyboardRow1" stretch="16,16,16,16,16,16,16,16,16,16">
+          <property name="spacing">
+           <number>6</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QPushButton" name="key_Q">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>Q</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_W">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>W</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_E">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>E</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_R">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>R</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_T">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>T</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_Y">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>Y</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_U">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>U</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_I">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>I</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_O">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>O</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_P">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>P</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QFrame" name="keyboardRow2_2">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="lineWidth">
+          <number>0</number>
+         </property>
+         <layout class="QHBoxLayout" name="keyboardRow2" stretch="8,16,16,16,16,16,16,16,16,16,8">
+          <property name="spacing">
+           <number>6</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <spacer name="horizontalSpacer_1">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Policy::Minimum</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_A">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>A</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_S">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>S</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_D">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>D</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_F">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>F</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_G">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>G</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_H">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>H</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_J">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>J</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_K">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>K</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_L">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>L</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_3">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Policy::Minimum</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QFrame" name="keyboardRow3_2">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="lineWidth">
+          <number>0</number>
+         </property>
+         <layout class="QHBoxLayout" name="keyboardRow3" stretch="16,16,16,16,16,16,16,16,32">
+          <property name="spacing">
+           <number>6</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QPushButton" name="key_ENTER">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 14px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>ENTER</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_Z">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>Z</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_X">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>X</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_C">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>C</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_V">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>V</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_B">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>B</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_N">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>N</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_M">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>M</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="key_BACKSPACE">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: #818384; color: white; font-size: 14px; font-weight: bold; border-radius: 5px;</string>
+            </property>
+            <property name="text">
+             <string>BACK</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>WordTableWidget</class>
+   <extends>QTableWidget</extends>
+   <header>ui/WordTableWidget.h</header>
+   <slots>
+    <slot>onListItemSelected(QListWidgetItem*)</slot>
+    <slot>onVirtualKeyPressed()</slot>
+   </slots>
+  </customwidget>
+ </customwidgets>
+ <tabstops>
+  <tabstop>guessDisplay</tabstop>
+  <tabstop>solutionListWidget</tabstop>
+  <tabstop>strategicListWidget</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>strategicListWidget</sender>
+   <signal>itemDoubleClicked(QListWidgetItem*)</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onListItemSelected(QListWidgetItem*)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>198</x>
+     <y>306</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>346</x>
+     <y>194</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>solutionListWidget</sender>
+   <signal>itemDoubleClicked(QListWidgetItem*)</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onListItemSelected(QListWidgetItem*)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>168</x>
+     <y>487</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>387</x>
+     <y>461</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>strategicListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>solutionListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>154</x>
+     <y>250</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>135</x>
+     <y>396</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>solutionListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>strategicListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>198</x>
+     <y>608</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>198</x>
+     <y>331</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>strategicListWidget</sender>
+   <signal>itemClicked(QListWidgetItem*)</signal>
+   <receiver>solutionListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>77</x>
+     <y>248</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>77</x>
+     <y>405</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>solutionListWidget</sender>
+   <signal>itemClicked(QListWidgetItem*)</signal>
+   <receiver>strategicListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>198</x>
+     <y>608</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>198</x>
+     <y>331</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_A</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>66</x>
+     <y>704</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>329</x>
+     <y>494</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_Q</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>36</x>
+     <y>650</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>251</x>
+     <y>618</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_W</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>111</x>
+     <y>637</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>290</x>
+     <y>601</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_E</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>163</x>
+     <y>648</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>315</x>
+     <y>592</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_R</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>228</x>
+     <y>644</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>250</x>
+     <y>598</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_T</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>280</x>
+     <y>645</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>349</x>
+     <y>597</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_Y</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>345</x>
+     <y>661</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>389</x>
+     <y>594</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_U</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>404</x>
+     <y>647</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>421</x>
+     <y>599</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_I</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>446</x>
+     <y>643</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>466</x>
+     <y>581</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_O</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>503</x>
+     <y>648</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>511</x>
+     <y>598</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_P</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>563</x>
+     <y>648</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>558</x>
+     <y>575</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_S</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>127</x>
+     <y>714</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>240</x>
+     <y>599</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_D</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>197</x>
+     <y>690</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>281</x>
+     <y>612</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_F</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>248</x>
+     <y>719</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>293</x>
+     <y>604</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_G</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>307</x>
+     <y>727</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>377</x>
+     <y>598</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_H</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>348</x>
+     <y>701</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>397</x>
+     <y>607</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_J</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>415</x>
+     <y>715</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>450</x>
+     <y>579</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_K</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>465</x>
+     <y>717</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>491</x>
+     <y>591</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_L</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>530</x>
+     <y>710</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>531</x>
+     <y>582</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_ENTER</sender>
+   <signal>clicked(bool)</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>23</x>
+     <y>760</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>260</x>
+     <y>577</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_Z</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>116</x>
+     <y>750</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>285</x>
+     <y>570</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_X</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>153</x>
+     <y>773</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>299</x>
+     <y>553</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_C</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>226</x>
+     <y>776</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>307</x>
+     <y>582</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_V</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>283</x>
+     <y>785</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>335</x>
+     <y>589</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_B</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>343</x>
+     <y>751</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>381</x>
+     <y>569</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_N</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>406</x>
+     <y>768</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>445</x>
+     <y>554</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_M</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>463</x>
+     <y>760</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>474</x>
+     <y>588</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>key_BACKSPACE</sender>
+   <signal>clicked()</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onVirtualKeyPressed()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>503</x>
+     <y>754</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>506</x>
+     <y>589</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>
