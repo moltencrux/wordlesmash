@@ -142,6 +142,17 @@ class WordTableWidget(QTableWidget):
         # Set initial focus to last row, col 0
         self.setCurrentCell(self.rowCount() - 1, 0)
 
+    def clear(self):
+        """Override clear to reset to one blank row."""
+        super().clear()
+        self.setRowCount(1)
+        self.setColumnCount(5)
+        self.initializeCells()
+        self.setCurrentCell(0, 0)
+        self.prev_focused_cell = (0, 0)
+        self.updateCellSizes()
+        print("Table cleared: Reset to 1 blank row")
+
     @pyqtSlot(QListWidgetItem)
     def onListItemSelected(self, item):
         """Slot to handle QListWidgetItem selection, sets last row text."""
@@ -155,14 +166,13 @@ class WordTableWidget(QTableWidget):
     @pyqtSlot()
     def onVirtualKeyPressed(self):
         """Slot to handle virtual keyboard button clicks."""
-        key_map = {c: Qt.Key.Key_A + ord(c) - ord('A') for c in ascii_uppercase}
-        key_map.update({'ENTER': Qt.Key.Key_Enter, 'BACK': Qt.Key.Key_Backspace})
 
         button = self.sender()
         if button and isinstance(button, QPushButton):
-            key = button.text().upper()
-            if key in key_map:
-                event = QKeyEvent(QKeyEvent.Type.KeyPress, key_map[key], Qt.KeyboardModifier.NoModifier, key)
+            key_name = button.property('keyName') or 'Key_' + button.text().upper()
+            key = getattr(Qt.Key, key_name, None)
+            if key:
+                event = QKeyEvent(QKeyEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier, key_name)
                 self.keyPressEvent(event)
                 print(f"Virtual key pressed: '{key}'")
             else:

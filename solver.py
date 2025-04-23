@@ -1,9 +1,5 @@
 #! /usr/bin/env python
 
-####XXX TODO: filter candidates by permitted letter count as well as straight position
-## could already be done, but double check
-## AND for permitted counts.. say that we know 2 letters of 5, then all other 
-# letters could have at most 3 occruances.
 
 # we can use statistics to calculate the liklihood of a slot being a character
 # say if we know that we have 'abc', or 'abcde' then we can defnitely mark out
@@ -21,9 +17,10 @@
 import argparse
 from collections import Counter
 from string import ascii_uppercase
-from enum import Enum, EnumMeta
-from heapq import nsmallest
+from heapq import nsmallest, nlargest
 from call_counter import call_counter
+from wordle_game import Color
+from itertools import chain
 
 # XXX question.. can we find a set of 4/5/6 words with maximum letter coverage?
 # how might we do that?
@@ -103,25 +100,6 @@ starting_words = ['KIOEA', 'AOIFE', 'AUETO', 'AEONS', 'AOTES', 'STOAE', 'AROSE',
 'SAITE', 'TAISE', 'ANISE', 'INSEA', 'SIENA', 'SINAE', 'ORIAS', 'ACIES', 'SAICE',
 'AESOP', 'PASEO', 'PSOAE', 'OSAGE', 'OUABE', 'HEIAU']
 
-#print(lf_dict)
-
-class ColorMeta(EnumMeta):
-    def __init__(cls, name, bases, classdict):
-        super().__init__(name, bases, classdict)
-        # Automatically initialize the _map attribute when the class is created
-        cls._map = {name[0]: member for name, member in cls.__members__.items()}
-
-class Color(Enum, metaclass=ColorMeta):
-    BLACK = 1
-    GREEN = 2
-    YELLOW = 3
-    UNKNOWN = 4
-
-    @staticmethod
-    def map(c):
-        return Color._map.get(c, Color.UNKNOWN)
-
-
 def load_word_list(filename):
         with open(filename) as f:
             return tuple(line.split(maxsplit=1)[0] for line in f)
@@ -154,11 +132,6 @@ def load_word_list(filename):
 # as As we are sure is in the word, then we can narrow down the word.
 # 
 
-# [ ] move guess_huristic_score into GuessManager. Why? I'm thinking to make the
-# GuessWord class more of a pure filter.  We also need to track the history.
-# so maybe it could also track that.
-
-# filter state / guess Set, filterSet
 class GuessFilter:
 
     def __init__(self, length=5, lexicon=None):
@@ -173,7 +146,6 @@ class GuessFilter:
         self.slots = [set(ascii_uppercase) for _ in range(length)] # sets of possibly valid characters for each position in the word
         self.char_slots = {c: set(range(length)) for c in ascii_uppercase} # XXX redundant?
         self.candidates = self._lexicon # remaining words that are still valid based on filters
-        # self.update_frequencies() #???
 
     def clone_state(self, source):
         self.length = source.length
@@ -186,7 +158,6 @@ class GuessFilter:
         self.char_slots = {c:s.copy() for (c, s) in source.char_slots.items()}
         self._lexicon = source._lexicon
         self.candidates = source.candidates
-        # self.freq_candidates = source.freq_candidates # don't think we need to copy
 
 
     @classmethod
@@ -252,9 +223,6 @@ class GuessFilter:
 
     def score(self):
         return len(self.candidates)
-
-
-
 
 
     def update_candidates(self):
@@ -373,6 +341,7 @@ class GuessFilter:
     def update_bad_guess(self, word, colors):
         self.update_filters(word, colors)
         self.update_candidates()
+        self.narrow_filters_by_candidates()
 
 
     def get_worst_case_guess_result(self, word):
@@ -405,57 +374,79 @@ class GuessFilter:
         # long as there is more than one in the slot.
 
 
+    def narrow_filters_by_candidates(self):
+        ...
+        # This will update the filters, slot_mins/maxes based on remaining candidates
+        # max counts of ev lettter in each word
+        # min counts of ev letter in each word.. might be 1 if all letters have s at some pos
+        # slot letters
+        # conflicts with guessd filter changes???
+        # for word in self.candidates:
+        #     ...
+        #     counts = Counter(word)
+        # But i'm not sure it's actually of any value yet. 
 
 
 
 
-# how should we determine a guess?
-# do we know all the letters in the word?
-# do we know their multiplicites?
-# do we know where they are in the word?
-# how much is a particular wrong guess likely to narrow our search?
-    # how many letters are remaining in the mask
-    # 
+
 class GuessManager:
     first_guesses = [ 'SALET', 'TARES', 'RATES', 'CRATE', 'SLANT', 'LEAST',
     'PRATE', 'ROAST',]
 
-    def __init__(self, length=5, filename=None):
+    def __init__(self, filename, length=5):
         self._catalog = load_word_list(filename)
         self.lexicon = tuple(w for w in self._catalog if len(w) == length) # the dictionary of words being considered as possibilities
-        self.guess = GuessFilter(length=5, lexicon=self.lexicon)
+        self.length = length
+        self.reset()
+
+    def reset(self):
+        self.filter  = GuessFilter(length=self.length, lexicon=self.lexicon)
         self.history = []
         self.redo = []
         self.update_frequencies()
 
-
     def update_bad_guess(self, word, colors):
-        self.history.append(self.guess)
-        self.guess = GuessFilter.from_source(self.guess)
-        self.guess.update_bad_guess(word, colors)
+        self.history.append(self.filter)
+        self.filter = GuessFilter.from_source(self.filter)
+        self.filter.update_bad_guess(word, colors)
         self.update_frequencies()
         # need to update the filters
         # 
 
     def update_frequencies(self):
-        # we're going to try preferring middling frequencies
-        guess = self.guess
-        self.freq_candidates = Counter(c for word in guess.candidates for c in word)
+
+        # letter_mult_ordered
+        self.candidates_mult = [letter_mult_ordered(word) for word in self.filter.candidates]
+
+        self.freq = Counter(c for c in chain.from_iterable(self.filter.candidates))
+        self.freq_mult = Counter((c, n) for (c, n) in chain.from_iterable(self.candidates_mult))
+
         # occurances of each character (key)
-        sorted_chars = sorted(self.freq_candidates.keys(), key=lambda c: self.freq_candidates[c])
+        # sorted_chars = sorted(self.freq_candidates.keys(), key=lambda c: self.freq_candidates[c])
         # chars sorted by frequency (lowest first i think)
 
-        rank_map = lambda rank: abs(((len(sorted_chars) - 1)  - 2 * rank) // 2)
+        # rank_map = lambda rank: abs(((len(sorted_chars) - 1)  - 2 * rank) // 2)
         # seems to be distance from the middle of sth?, b/c rank is also magnitude ~ len(sorted_chars)
         # could this be done more easily?  maybe i did it b/c we center it & we want 2 zeros or 2 ones
 
-        rank = {c:rank_map(r) for (r, c) in enumerate(sorted_chars)}
-        self.freq_candidates = rank
+        # rank = {c:rank_map(r) for (r, c) in enumerate(sorted_chars)}
+        # self.freq_candidates = rank
+
+        # frequency a char per row (by multiplicity)
+        self.freq_by_slot_mult = [letter_mult_ordered(col) for col in zip(*self.candidates_mult)]
+
+        # >>> list(zip(*arr))
+
 
     def undo_last_guess(self):
         # self.redo.append(self.guess)
-        self.guess = self.history.pop()
+        self.filter = self.history.pop()
         self.update_frequencies()
+
+
+    # just some ideas... but we could gather statistics about say... words that have 1 letter, how likely they are to have
+    # another letter. but really we have that with the filtered candidates
 
 
 
@@ -467,15 +458,15 @@ class GuessManager:
         # if word == 'AEONS':
         #      pass
 
-        clone = GuessFilter.from_source(self.guess)
-        worst_guess_result = self.guess.get_worst_case_guess_result(word)
+        clone = GuessFilter.from_source(self.filter)
+        worst_guess_result = self.filter.get_worst_case_guess_result(word)
         clone.update_bad_guess(word, worst_guess_result)
         # should we just update the filter here?
         return clone.score()
 
     def guess_heuristic_score(self, word):
 
-        guess = self.guess
+        # guess = self.guess
 
         # canddate unguessed letter counts
         # maybe give a slight bonus for guess validity
@@ -503,14 +494,14 @@ class GuessManager:
             # the field all that much in the case of a hit, but they do in case of
             # a miss
             modifier = 0
-            if c not in guess.forbidden:
-                if c not in guess.required:
+            if c not in self.filter.forbidden:
+                if c not in self.filter.required:
                     modifier += 19
-                    modifier += min(qty, guess.qty_maxes[c], len(guess.char_slots[c]))
+                    modifier += min(qty, self.filter.qty_maxes[c], len(self.filter.char_slots[c]))
                     # possibly redundant min check above
                 else:
                     for i in char_pos[c]:
-                        if c in guess.slots[i] and len(guess.slots[i]) > 1:
+                        if c in self.filter.slots[i] and len(self.filter.slots[i]) > 1:
                             modifier += 1
             else:
                 modifier = 0
@@ -555,10 +546,10 @@ class GuessManager:
         # green letters w/ definite qty
 
     
-    def get_suggestions(self):
+    def get_suggestions_orig(self):
 
 
-        guess = self.guess
+        # guess = self.guess
 
 
         if not self.history:
@@ -571,8 +562,8 @@ class GuessManager:
         else:
             # ratings = ((self.rate_guess(word), word) for word in self.candidates)
             #ratings = ((self.rate_guess(word), word) for word in self._base_words)
-            heuristic_ratings = ((self.guess_heuristic_score(word), word) for word in guess._lexicon)
-            candidate_ratings = ((self.rate_guess(word), word) for word in guess.candidates)
+            heuristic_ratings = ((self.guess_heuristic_score(word), word) for word in self.filter._lexicon)
+            candidate_ratings = ((self.rate_guess(word), word) for word in self.filter.candidates)
             # XXX sth is happening here, and ratings are wrong, geting 0 for many things
             # somehow candidates maybe?
             #ratings = ((self.rate_guess(word), word) for word in self.candidates)
@@ -594,8 +585,167 @@ class GuessManager:
         # no bonus for letter that is in self.exlude 0
         # slight bonus for letter that is in required, but only if not in bad pos
         # if not in either, than bonus according to letter frequency
-        
 
+    def get_suggestions_Y(self):
+
+
+        # guess = self.guess
+        heuristic_ratings = ((self.heuristic_Y(word), word) for word in self.filter._lexicon)
+        candidate_ratings = ((self.heuristic_Y(word), word) for word in self.filter.candidates)
+
+        best_heuristic = nlargest(20, heuristic_ratings)
+        best_candidates = nlargest(20, candidate_ratings)
+
+        return {'narrowers':[word + ' ' + str(_) for (_, word) in best_heuristic],
+                'candidates':[word + ' ' + str(_) for (_, word) in best_candidates]}
+
+        # we can concisder invalid guesses that might narrow the field much more,
+        # but need to be sure that if we assume it will be marked bad in a spot, that it
+        # is possible for it to be marked bad there.  So.. we need to be sure that the
+        # letters int the guess conform to min/max? probably, otherwise it's a wasted letter
+        # we might could still consider it, if there is some more compelling reason, ohwever
+        # it should at least not increase the rating of that word.
+
+        # no bonus for letter that is in self.exlude 0
+        # slight bonus for letter that is in required, but only if not in bad pos
+        # if not in either, than bonus according to letter frequency
+
+    get_suggestions = get_suggestions_Y
+
+    def heuristic_Y(self, guess):
+        ...
+        # here, gonna do just pure min (likelihood) of the letter (w / mults, being in/out the word.)
+        # word_count = len(self.filter.candidates)
+        #word_mult = self.freq_augmented
+
+        # word_mult = letter_mult_ordered(word)
+
+        total = 0
+        for c, n in letter_mult_ordered(guess):
+            if (c, n) in self.freq_mult:
+                score = self.freq_mult[(c, n)]
+                score = min(score, len(self.filter.candidates) - score)
+                total += score
+
+        return total
+
+
+    def heuristic_X(self, guess):
+
+
+
+        word_mult = self.freq_augmented
+        ctr = Counter(guess)
+        Counter([count_letter_util(word) for word in guess.candidates])
+
+        l = []
+
+        for letter, qty in ctr.items():
+            for i in range(1, qty + 1):
+                l.append((letter, i))
+
+        set(l)
+
+        # you were thikning about seeing how many wors have 1st Rs, vs 2nd Rs..
+
+        # how many non-black chars?
+        # how many untried chars? s/l chars w/ UL > 0 and LL = 0?
+        # so.. we figure out the score for all the chars based on frequency
+        # and add them up, but, if we know that a spot is green, then
+        # we should specifically disallow that letter on it, i.e. any words
+        # that match it should get 0 points for it, b/c we're not gaining any
+        # knowledge from it.
+
+        # what if it's only a choice between 2 chars? should we adjust the
+        # reward? # maybe we should consider how many open spots that char has
+        # in our pattern
+
+        #  * how many spots that char could occupy
+        #  * frequency of that char in possible solutions
+        #  * so maybe.. lower choices shoudl reduce the score for that slot , or
+        #    rather the possible letters that occupy that slot
+        #  * so, the score should be adjusted by the # of possible slots it could
+        #  * :: frequencey in candidates,  freq in slot filters, 
+
+        # a problem with the green slots is, you'll get at least a yellow even
+        # when you put that letter in another slot, unless it's a duplicate in the guesss
+        # so you don't get as much info as a letter that has not been guessed at all.
+        # so, letters not yet guessed will have no lower limit && should occur in
+        #  multiple? other spots
+        # * upper limit 1 & lower limit 1 mean no contribution 
+
+        # so i'm thinking we shouldn't total all the char counts, b/c...
+        # we don't want to weight chars for known slots.
+        # what about the weights for a duplcated char?  i'm thinking combine them for weights from a particular slot..
+        # but maybe just weight that slot 0...  on the count.. ? what does that mean
+        # so i'm thinking.. 2nd s should have weight if we can place  a 1st s, but the 1st s should have no weight.
+        # but should 1st s really be 0? it should probably be close. it shoudl definitely be 0 if in it's known slot
+        # but maybe outside its slot could be of some use.
+        # maybe.. figure out slot weight
+        # but maybe a 1st s outside the slot has a 1/n chance of matching a 2nd s. so maybe weight it acc to probability
+        # of matching a 2nd/3rd s 
+        # so maybe the weight of a known slot should be acc to Pr(yellow), which woud be the totals of all Ys outside the 
+        # slot (and all will be outside of the slot on the filter). So a cumulative count probably does have value.
+        # for calculating letters in slots that are not matched to it.
+        # if a green and maybe yellow are possibilities, then what? total Ys 
+        # Pr(New yellow), # if in known spot, then just total frequency of yellow if no yellow before
+        # # Pr(New green)
+        # Pr(New yellow) - Pr(new green)
+        # if we got yellow b4, then Pr(new green) would be 1/4 in another spot, at least
+        # so let's assume the min qty is 0 & UL is 1-5
+        #                  Pr(Yellow) = # words containing C - # words containgin C in this slot
+        #                  Pr(Green) (all words containg C in this slot): so.. if 100% we ignore : do we use measure of entropy?
+        #                  So maybe just add total Pr() of containing it to heuristic
+
+
+        # seems to me that likelihood of in vs/ liklihood of out are both relavent, as they tell us info... and divide the trees
+        # so.. maybe we could give it th min?
+
+        for c, n in word_mult:
+
+            if self.filter.qty_mins[c] == 0 and self.filter.qty_maxes[c] > 0 : # any Y/G square will be new
+                ...
+                slot_score = self.freq_candidates_augmented[c] # for all slots
+                # pr of green...
+                # also need to know... are we a c1? a c2?, so even if we're a c2, it tells us something..? yes?,but maybe not much more.
+                # so maybe we only get a 'green bonuords' here
+
+        # what if Min qty is 1?
+        #           * got green b4
+        #               * only consider Pr(C2)
+        #           * got yellow b4
+        #               *Pr(Green | No C2) +  Pr(green )
+        #           * # so we should consdier guesses with 2nd occurances? might get UL
+        #           # can we find Pr( G 2?)
+        #           # also have a 1/n-1 chance of finding a green. How useful is that? It elimintaes all other possibilities on that slot
+        #           # or 
+        # what if mqty is 2+?
+        #           * 2 green b4
+        #               only consider Pr(C3)
+        #           # 1 green, 1 yellow
+        #               Pr(new green) #
+        #           # 2 yellow
+        #               Pr(new yellow) # this gives us 2 greens if len=5
+        # what if mqty is 3+?
+        #           * got 3 yellows is not possible
+        #           * got 2 yellows i Green
+        #                   othere greens are duducible if len=5
+        #           * got 2 greens & 1 yellow
+        #                   2 rem spots, 50/50 (1 guess will get it for sure)
+
+
+def letter_mult_ordered(word):
+    """
+    Returns a tuple of each letter and the number of times it has occured from
+    left to right.  separate characters
+    """
+    counter = Counter()
+    return tuple((c, counter.update(c) or counter[c]) for c in word)
+
+
+# seems useful for something, maybe calculating letter frequency. But match
+# liklihood.. b/c a second S could be matched by a single S in the guess.
+# like if it's on the same spot.
 
 
 

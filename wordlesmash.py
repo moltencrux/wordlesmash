@@ -20,11 +20,6 @@ if __debug__:
 else:
     logging.basicConfig(stream=sys.stderr, level=logging.ERROR)
 
-# def pathhelper(resource, package='ui'):
-#     co = importlib.resources.as_file(importlib.resources.files(package).joinpath(resource))
-#     with co as posix_path:
-#         path = posix_path
-#     return path
 
 def pathhelper(resource, package='ui'):
     return Path(files(package) / resource)
@@ -56,12 +51,14 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         # FormulaList.setSettings(self.settings) I don't think this is necessary
         self.initUI()
 
-        self.guess = GuessManager(length=5, filename='default_words.txt')
+        self.guess = GuessManager(filename='default_words.txt', length=5)
+        self.updateSuggestionLists()
         # hook stuff up
         # what is the connect signall?
 
         self.guessDisplay.wordSubmitted.connect(self.onWordSubmitted)
         self.guessDisplay.wordWithdrawn.connect(self.onWordWithdrawn)
+        self.resetButton.clicked.connect(self.onResetGame)
 
     def updateSuggestionLists(self):
 
@@ -95,6 +92,13 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
     def onWordWithdrawn(self):
         print('onWordWithdrawn called')
         self.guess.undo_last_guess()
+        self.updateSuggestionLists()
+
+    @pyqtSlot()
+    def onResetGame(self):
+        print('onResetGame called')
+        self.guessDisplay.clear()
+        self.guess.reset()
         self.updateSuggestionLists()
 
 
