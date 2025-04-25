@@ -85,7 +85,7 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
 
         print(f"Received wordSubmitted: '{word} {colors}'")
 
-        self.guess.update_bad_guess(word, colors)
+        self.guess.update_guess_result(word, colors)
         self.updateSuggestionLists()
 
     @pyqtSlot()

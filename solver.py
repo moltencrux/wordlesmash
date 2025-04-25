@@ -102,7 +102,7 @@ starting_words = ['KIOEA', 'AOIFE', 'AUETO', 'AEONS', 'AOTES', 'STOAE', 'AROSE',
 
 def load_word_list(filename):
         with open(filename) as f:
-            return tuple(line.split(maxsplit=1)[0] for line in f)
+            return tuple(line.split(maxsplit=1)[0] for line in f if line)
 
 
 
@@ -338,7 +338,7 @@ class GuessFilter:
             pass
 
 
-    def update_bad_guess(self, word, colors):
+    def update_guess_result(self, word, colors):
         self.update_filters(word, colors)
         self.update_candidates()
         self.narrow_filters_by_candidates()
@@ -387,12 +387,7 @@ class GuessFilter:
         # But i'm not sure it's actually of any value yet. 
 
 
-
-
-
 class GuessManager:
-    first_guesses = [ 'SALET', 'TARES', 'RATES', 'CRATE', 'SLANT', 'LEAST',
-    'PRATE', 'ROAST',]
 
     def __init__(self, filename, length=5):
         self._catalog = load_word_list(filename)
@@ -406,10 +401,10 @@ class GuessManager:
         self.redo = []
         self.update_frequencies()
 
-    def update_bad_guess(self, word, colors):
+    def update_guess_result(self, word, colors):
         self.history.append(self.filter)
         self.filter = GuessFilter.from_source(self.filter)
-        self.filter.update_bad_guess(word, colors)
+        self.filter.update_guess_result(word, colors)
         self.update_frequencies()
         # need to update the filters
         # 
@@ -460,7 +455,7 @@ class GuessManager:
 
         clone = GuessFilter.from_source(self.filter)
         worst_guess_result = self.filter.get_worst_case_guess_result(word)
-        clone.update_bad_guess(word, worst_guess_result)
+        clone.update_guess_result(word, worst_guess_result)
         # should we just update the filter here?
         return clone.score()
 
@@ -816,7 +811,7 @@ if __name__ in '__main__':
             if len(guess) == word_length and all(c in 'BGY' for c in colors):
                 break  # Exit the loop if input is valid
             print(f"Invalid input. Please enter a string of letters 'AGY, length {word_length}.")
-        manager.update_bad_guess(guess, colors)
+        manager.update_guess_result(guess, colors)
         print(f'Total candidates: {len(manager.guess.candidates)}')
         guesses = manager.get_suggestions()
         print(f'Top narrowing guesses: {guesses['narrowers']}')
