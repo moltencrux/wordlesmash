@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>600</width>
-    <height>800</height>
+    <width>660</width>
+    <height>880</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -92,13 +92,19 @@
        <enum>Qt::Orientation::Horizontal</enum>
       </property>
       <widget class="QSplitter" name="suggestionSplitter">
+       <property name="maximumSize">
+        <size>
+         <width>250</width>
+         <height>16777215</height>
+        </size>
+       </property>
        <property name="orientation">
         <enum>Qt::Orientation::Vertical</enum>
        </property>
        <widget class="QFrame" name="strategicFrame">
         <property name="maximumSize">
          <size>
-          <width>200</width>
+          <width>250</width>
           <height>16777215</height>
          </size>
         </property>
@@ -176,7 +182,7 @@
        <widget class="QFrame" name="solutionFrame">
         <property name="maximumSize">
          <size>
-          <width>200</width>
+          <width>250</width>
           <height>16777215</height>
          </size>
         </property>

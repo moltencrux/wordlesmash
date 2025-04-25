@@ -488,6 +488,10 @@ class MainWindow(QMainWindow):
         back_button.setFixedSize(60, button_size)
         back_button.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         keyboard_layout.addWidget(back_button, 2, 8)
+        reset_button = QPushButton("RESET", keyboard_widget)
+        reset_button.setFixedSize(60, button_size)
+        reset_button.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        keyboard_layout.addWidget(reset_button, 2, 9)
         main_layout.addWidget(keyboard_widget)
 
         # Connect signals
@@ -498,6 +502,7 @@ class MainWindow(QMainWindow):
             button.clicked.connect(self.table.onVirtualKeyPressed)
         enter_button.clicked.connect(self.table.onVirtualKeyPressed)
         back_button.clicked.connect(self.table.onVirtualKeyPressed)
+        reset_button.clicked.connect(self.table.clear)
 
     def onWordSubmitted(self, word, colors):
         """Slot to handle wordSubmitted signal."""
