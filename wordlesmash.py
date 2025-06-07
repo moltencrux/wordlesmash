@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow
 from importlib.resources import files
 from pathlib import Path
 from utils import all_files_newer
-from solver import GuessManager, Color
+from solver import GuessManager, Color, DecisionTreeGuessManager
 
 QCoreApplication.setApplicationName('moltencrux')
 QCoreApplication.setOrganizationName('WordLeSmash')
@@ -52,6 +52,7 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.initUI()
 
         self.guess = GuessManager(filename='default_words.txt', length=5)
+        # self.guess = DecisionTreeGuessManager(filename='decision_tree.txt')
         self.updateSuggestionLists()
         # hook stuff up
         # what is the connect signall?
@@ -81,7 +82,7 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
 
         color_map = {'#000000': Color.BLACK, '#6aaa64': Color.GREEN, "#c9b458": Color.YELLOW}
 
-        colors = [color_map.get(c, Color.UNKNOWN) for c in colors_hex]
+        colors = tuple(color_map.get(c, Color.UNKNOWN) for c in colors_hex)
 
         print(f"Received wordSubmitted: '{word} {colors}'")
 
