@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
 
-
 from solver import GuessManager, GuessFilter
 from wordle_game import WordleGame
 from random import sample
 from collections import namedtuple
 import json
 from datetime import datetime
-
-
-# get a word list
-# measure each 1st guess against that word
-#   see how many choices are left after the word
-# take the average/total over all secrets
 
 class WordleAnalyzer():
     def __init__(self, filename):
