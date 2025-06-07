@@ -9,10 +9,10 @@ class ColorMeta(EnumMeta):
         cls._map = {name[0]: member for name, member in cls.__members__.items()}
 
 class Color(Enum, metaclass=ColorMeta):
-    BLACK = 1
+    BLACK = 0
+    YELLOW = 1
     GREEN = 2
-    YELLOW = 3
-    UNKNOWN = 4
+    UNKNOWN = 3
 
     @staticmethod
     def map(c):

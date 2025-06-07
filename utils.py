@@ -23,3 +23,8 @@ def all_files_newer(set1, set2):
     else:
         return latest_time_set1 > earliest_time_set2
 
+
+
+def diff_indexes(seq1, seq2):
+    """yield indices of differing elements in two sequences"""
+    yield from (i for i, (a, b) in enumerate(zip(seq1, seq2)) if a != b)
