@@ -1,6 +1,8 @@
 import random
-from enum import Enum, EnumMeta
+from enum import Enum, EnumMeta, IntEnum
 from collections import Counter
+import json
+from functools import lru_cache
 
 class ColorMeta(EnumMeta):
     def __init__(cls, name, bases, classdict):
@@ -8,15 +10,77 @@ class ColorMeta(EnumMeta):
         # Automatically initialize the _map attribute when the class is created
         cls._map = {name[0]: member for name, member in cls.__members__.items()}
 
-class Color(Enum, metaclass=ColorMeta):
+        cls._val_map = {member.value: member for member in cls.__members__.values()}
+
+class Color(IntEnum, metaclass=ColorMeta):
     BLACK = 0
     YELLOW = 1
     GREEN = 2
-    UNKNOWN = 3
+    UNKNOWN = -1
 
     @staticmethod
     def map(c):
         return Color._map.get(c, Color.UNKNOWN)
+
+    @staticmethod
+    def from_value(color):
+        return Color._val_map.get(color, Color.UNKNOWN)
+
+    @staticmethod
+    @lru_cache
+    def ordinal(seq):
+        if isinstance(seq, str):
+            seq = tuple(Color(int(c)) for c in seq)
+        return sum(d.value * (3 ** p) for p, d in enumerate(seq))
+
+    @staticmethod
+    def from_ordinal(n, length=5):
+        seq = [Color.from_value(d % 3) for d in iter(lambda: n, 0) if (n := n // 3) >= 0]
+        seq += [Color.BLACK] * max(0, length - len(seq))
+        return tuple(seq)
+
+    @staticmethod
+    def seq_to_num_str(seq):
+        return ''.join(str(c.value) for c in seq)
+
+    @staticmethod
+    @lru_cache
+    def all_green(length=5):
+        return Color.ordinal((Color.GREEN,)*length)
+    
+
+    # class ColorEncoder(json.JSONEncoder):
+
+    #     def default(self, obj):
+    #         if isinstance(obj, Color):
+    #             return obj.value
+    #         elif isinstance(obj, dict):
+    #             # Convert dictionary keys if they are enums
+    #             return {key.value if isinstance(key, Color) else key: value for key, value in obj.items()}
+    #         return super().default(obj)
+
+
+def get_clue_for_secret(pick, secret):
+
+    feedback = [Color.BLACK] * len(secret)
+    secret_counts = Counter(secret)
+
+    rest = []
+    # find where each letter is located for yellow
+
+    for i, (g, s) in enumerate(zip(pick, secret)):
+        if g == s:
+            feedback[i] = Color.GREEN
+            secret_counts[g] -= 1
+        else:
+            rest.append((i, g))
+
+    for i, g in rest:
+        if g in secret_counts and secret_counts[g] > 0:
+            secret_counts[g] -= 1
+            feedback[i] = Color.YELLOW
+
+    return tuple(feedback)
 
 
 class WordleGame:
@@ -74,25 +138,9 @@ class WordleGame:
 
         return feedback
 
+
     def _get_feedback(self, guess):
-        feedback = [Color.BLACK] * len(self.secret_word)
-        secret_counts = self._secret_counts.copy()
-        rest = []
-        # find where each letter is located for yellow
-
-        for i, (g, s) in enumerate(zip(guess, self.secret_word)):
-            if g == s:
-                feedback[i] = Color.GREEN
-                secret_counts[g] -= 1
-            else:
-                rest.append((i, g))
-
-        for i, g in rest:
-            if g in secret_counts and secret_counts[g] > 0:
-                secret_counts[g] -= 1
-                feedback[i] = Color.YELLOW
-
-        return feedback
+        return get_feedback_for_secret(guess, self.secret_word)
 
     def get_status(self):
         return {
