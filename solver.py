@@ -7,12 +7,13 @@ from call_counter import call_counter
 from wordle_game import Color
 from itertools import chain, islice
 from abc import ABCMeta, abstractmethod, abstractclassmethod
-from read_tree import read_decision_tree
+from tree_utils import read_decision_tree_set
 import numpy as np
 from utils import diff_indexes
 from or_matrix import compute_or_matrix, is_or_matrix, find_closed_components
 from filter_code import FilterCode
 from scipy.sparse import lil_matrix
+from copy import deepcopy
 
 # XXX question.. can we find a set of 4/5/6 words with maximum letter coverage?
 # how might we do that?
@@ -489,10 +490,11 @@ class GuessFilter:
     char_bits_map = {c:tuple(b == '1' for b in f'{i:05b}') for i, c in enumerate(domain.keys())}
     bits_char_map = {v:k for k, v in char_bits_map.items()}
 
-    def __init__(self, length=5, lexicon=None):
+    def __init__(self, length=5, lexicon=None, candidates=None):
 
         self.length = length # length of the word
         self._lexicon = lexicon # the dictionary of words being considered as possibilities
+        self.candidates = candidates if candidates is not None else lexicon # remaining words that are still valid based on filters
         self.viable = {None: [True] * length} # keys: known letters w/ list of Booleans that denotes a letter's possible presence at a position
         self.confirmed = {None: CustomList([False] * length)} # keys: known letters w/ list of Booleans that denotes greens (seen or implied) at a position
         self.blacklist = set()
@@ -501,22 +503,27 @@ class GuessFilter:
         # of what is known to be there.
         self.letters = Counter({None: self.length})
         self._qty_mins = {c: 0 for c in ascii_uppercase}
-        self.candidates = self._lexicon # remaining words that are still valid based on filters
-        self.components = [0] * length
+        # self.components = [0] * length
+        self.picks = {word:word for word in lexicon} if lexicon else {}
+        # This will be a dictionary of picks that will give a distinct result
+        # if guessed. Equivalent guesses (i.e. disseparate guesses that will
+        # produce the same updated filter state will be folded together.
+
 
     def clone_state(self, source):
         self.length = source.length
         self._lexicon = source._lexicon
-        self.viable = source.viable.copy()
-        self.confirmed = source.confirmed.copy()
+        self.viable = deepcopy(source.viable)
+        self.confirmed = deepcopy(source.confirmed)
         self.blacklist = source.blacklist.copy()
         self.letters = source.letters.copy()
         self._qty_mins = source._qty_mins.copy()
         self.candidates = source.candidates
-        self.components = source.components.copy()
+        # self.components = source.components.copy()
+        self.picks = source.picks.copy()
 
     @classmethod
-    def from_source(cls, source):
+    def from_source(cls, source, candidates=None):
         new = cls(length=source.length)
         new.clone_state(source)
         return new
@@ -537,8 +544,11 @@ class GuessFilter:
         gf.set_blacklist(blacklist)
 
         letters = fc.unpack_known_chars()
-
         gf.letters = Counter(letters)
+
+        if gf.get_unknown_count() == 0:
+            gf.blacklist.update(gf.alphabet)
+
         # Set known characters
         for c in filter(None, letters):
             gf.viable.setdefault(c, gf.viable[None].copy())
@@ -585,10 +595,10 @@ class GuessFilter:
     def get_qty_min(self, c):
         return self.letters.get(c, 0)
 
-    def get_component(self, c):
-        index = self.viable[c].find(True)
-        return self.components[index]
-        # careful/bc a single letter could be in multiple CCs
+    # def get_component(self, c):
+    #     index = self.viable[c].find(True)
+    #     return self.components[index]
+    #     # careful/bc a single letter could be in multiple CCs
 
     def get_qty_max(self, c):
     
@@ -753,10 +763,28 @@ class GuessFilter:
                 slots[pos] = False
 
 
+    def set_candidates(self, candidates):
+        self.candidates = candidates
 
     def update_candidates(self):
+
+        # maybe check if we're all green, and then just set candidates to that.
+        # But I'm not sure if it offers any real savings
+        # if False:
+        #     letter_list = [None] * 5
+        #     for c, fields in self.confirmed.items():
+        #         for pos, present in enumerate(fields):
+        #             if present:
+        #                 letter_list[pos] = c
+        #     if None not in letter_list:
+        #         self.candidates = [''.join(letter_list)]
+
         backup = self.candidates
         self.candidates = tuple(filter(self.guess_valid, self.candidates))
+
+    def update_picks(self):
+        # collapses picks that are equiavlent given the filter state
+        self.picks = {self.normalize_guess(word): word for word in self.picks.values()}
 
     def get_matrix_old_good(self):
         matrix = []
@@ -785,8 +813,7 @@ class GuessFilter:
     # NOTE this version is untested
     def get_matrix(self):
 
-        # XXX should this be a LIL matrix? Going with it for now
-        matrix = lil_matrix(np.zeros((self.length, self.length), dtype=bool))
+        matrix = np.zeros((self.length, self.length), dtype=bool)
         rows = iter(matrix)
 
         for c in sorted(self.letters.keys(), key=self.char_ord.get):
@@ -807,7 +834,8 @@ class GuessFilter:
                 # next(rows)[:] = np.bool(self.viable[c]) & ~ np.bool(self.confirmed[c])
                 row[:] = np.bool(self.viable[c]) & ~ np.bool(self.confirmed[c])
 
-        return matrix
+        # XXX should this be a LIL matrix? Going with it for now
+        return lil_matrix(matrix)
 
     def update_filters(self, word, colors):
 
@@ -833,10 +861,6 @@ class GuessFilter:
         for pos, (c, color) in enumerate(zip(word, colors)):
             if color == Color.GREEN:
                 self.mark_confirmed(c, pos)
-                # self.confirmed[c][pos] = True
-                # # Other letters cannot occupy a green position
-                # for other, slot in self.viable.items():
-                #     slot[pos] = False
 
             elif color in (Color.YELLOW, Color.BLACK):
                 if c in self.viable:
@@ -846,17 +870,18 @@ class GuessFilter:
         for c, min_qty in new_mins.items():
             self.letters[c] = max(self.letters.get(c, 0), min_qty, self.confirmed[c].count(True))
 
-        # Reduce unknown character quantities
-        if None in self.letters:
-            self.letters[None] = self.get_unknown_count()
-            if self.letters[None] <= 0:
-                del self.letters[None]
-                self.blacklist.update(self.alphabet.keys())  # No more new leters
-
 
         reduction_needed = True
         while reduction_needed:
             reduction_needed = False # do at least once
+            # Reduce unknown character quantities
+            if None in self.letters:
+                self.letters[None] = self.get_unknown_count()
+                if self.letters[None] <= 0:
+                    del self.letters[None]
+                    self.blacklist.update(self.alphabet.keys())  # No more new leters
+                    reduction_needed = False # do at least once
+
             # Maps rows in the presence adjacency matrix to letters they represent
 
             # Update based on viable OR matrix bipartitate graph
@@ -874,18 +899,18 @@ class GuessFilter:
             # this needs to be updated. should it be a function?
             # Rows represent letter, cols represent guess pos
             # Process changes to the viable position flags
-            for row, col in zip(*np.where(M != R)):
+            for row, col in zip(*np.nonzero(M != R)):
                 self.viable[row_letter_map[row]][col] = False
                 reduction_needed = True
                 # need to fix this for dups and confirmed greens
                 # actually, maybe ok. cuz confirmed shouldn't from datetime import datetime
-            # Q: could the row_letter_map change since last determeined? possibly
+            # Q: could the row_letter_map change since last determined? possibly
 
 
-
-            # XXX reivew this to make sure we're updating new greens properly
+            # Check each character to see if its positions can be pinned down
+            # and/or their quantities maxed out such that they can be
+            # blacklisted
             for c in self.letters.keys() - {None}:
-                new_green = False  # try to delete this
 
                 # Get all slots w/ possible presence, confirmed or viable
                 confirmed = np.bool(self.confirmed[c])
@@ -918,10 +943,8 @@ class GuessFilter:
                         # All positions of possible instances are known
                         self.viable[c] = [False] * self.length
 
-        
 
-
-            # Check slots for new confirmed/green
+            # Check each slot to see if its contents can be confirmed
             for pos in range(self.length):
                 # total = len([c_found := c for c in self.letters if self.viable[c][pos]])
 
@@ -935,75 +958,20 @@ class GuessFilter:
                     self.mark_confirmed(c, pos)
                     # if condition implies all other chars at this pos marked not viable
 
-
-                # This checks a column to see if it can be occupied by exactly
-                # one letter, even if preiously unguessed based on other
-                # possibilities being ruled out.
+                # Checks column to see if it can be occupied by exactly one
+                # letter, even if preiously unguessed
                 elif len(allowed := self.charset_allowed_in_slot(pos)) == 1:
                     c = next(iter(allowed))  # or pop
                     if not self.confirmed[c][pos]:
                         reduction_needed = True
                         self.mark_confirmed(c, pos)
 
-                        # Q is c in letters for sure?
-                        # maybe not.. and could the confirmed/viable be blank?
-
-                        # this is a new instnace
-                        # But _HOW_ new.. did we just narrow down prev known yellow?
-                        # Or did we find one via blacklist narrowing?
-
-                        # I'm thinking if it was viable before, maybe it could be
-                        # accounted? or maybe not.
-                        # 1: set letter qty to min(current_qty, #confirmed)
-
-
-                    # this is a green.
-                    ...
-                # XXX If we reduced the blacklist to 1 char, then
-                # others in the known chars have to be maxed out, i.e. in the blacklist too
-                # so no matter what, the blacklist will leave out a singel char in this case
-                # then letter quantities would get qty incremented/added
-
-
-        # I don't think we care about closed components for reduction outside of OR matrix
-
-        # XXX should we represent the matrix viable diff than the
-        # self.viable? maybe.  like.. if we know 1 gn, but other
-        # yellows.. could that affect the closed components stuff?
-        # self.viable[None] should always be opposit of all known
-        # greens (at least?)  what if say we know 3-4 chars but not
-        # max qtys, and we aso know rest of all letters are in the
-        # blacklist. At that point we would know all letters, but
-        # not all quantities. How do we represent that? blacklist
-        # I suppose self.viable[None] would not all be 0? b/c
-        # it reperesents the unknown chars. But it might be that we
-        # can't easily do matrix reduction with any unknowns.
-
-        # if all letters are known #XXX this is broken...
-        # if (all(not b for c, b in self.blacklist.items() if c not in self.confirmed)
-        #         or self.letters.total() == self.length):
-
-        # If all letters (but possibly not quantities) are known, mark out all
-        # slots from unknown characters
-        # XXX on second thought, this might be buggy, b/c we still need to track
-        # where the unknown char could be, even if it's a dupe of a known char
-        
-        # if (self.letters.total() - self.letters.get(None, 0) == self.length or
-        #     not set(self.alphabet) - self.blacklist - set(self.letters)):
-        #     self.viable[None] = [False] * self.length
-
-
-        # If all letters and quantities are known, blacklist all further
-        # character instances
-        if self.get_unknown_count() == 0:
-            self.blacklist.update(self.alphabet)
-            del self.confirmed[None]
-            # del self.viable[None]
 
 
     def update_guess_result(self, word, colors):
         self.update_filters(word, colors)
         self.update_candidates()
+        self.update_picks()
         self.narrow_filters_by_candidates()
 
 
@@ -1048,7 +1016,41 @@ class GuessFilter:
         #     ...
         #     counts = Counter(word)
         # But i'm not sure it's actually of any value yet. 
-#class 
+
+    def normalize_guess(self, word):
+        """
+        This method creates a key based on a guess against a particular filter,
+        changing characters to _ that provide no info on the target and have no
+        effect on the future state of the filter. Characters not allowed in a
+        particular slot, but whose minimum or maximum quantities could be further
+        determined will be appended to the resulting key in alphabetical order.
+        In this way, distinct guesses with equivalent effects can be folded onto
+        each other, reducing the search space
+        """
+
+        excluded = Counter()
+        included = Counter()
+        key = []
+
+        for pos, c in enumerate(word):
+
+            if (not self.char_allowed_slot(c, pos) or
+                c in self.confirmed and self.confirmed[c][pos]):
+                key.append('_')
+                excluded.update(c)
+            else:
+                key.append(c)
+                included.update(c)
+
+        for c, qty in excluded.items():
+            excluded[c] = max(min(qty, self.get_qty_max(c) - included[c]), 0)
+
+        if excluded.total() > 0:
+            key += [':'] + sorted(c for c, n in excluded.items() for _ in range(n))
+
+        return ''.join(key)
+
+
 class AbstractGuessManager(metaclass=ABCMeta):
 
     @abstractmethod
@@ -1069,7 +1071,7 @@ class AbstractGuessManager(metaclass=ABCMeta):
 
 class DecisionTreeGuessManager(AbstractGuessManager):
     def __init__(self, filename):
-        self.tree = read_decision_tree(filename)
+        self.tree = read_decision_tree_set(filename)
         self.reset()
 
     def reset(self):

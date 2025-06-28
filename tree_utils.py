@@ -7,6 +7,7 @@ from base64 import b64decode, b64encode
 from string import ascii_uppercase
 import numpy as np
 from rank_comb import generate_combination, rank_combination, rank_multiset
+from wordle_game import get_clue_for_secret
 
 """
 so maybe 25 bits max for the yellow spot blacklist
@@ -43,8 +44,44 @@ def bit_string_to_bytes(bit_string):
     return bytes(byte_array)
 
 
-
 def read_decision_tree(file):
+    tree = {}
+
+    with open(file, 'r') as f:
+
+        for line in f:
+            branch = tree
+            for guess, clue in batched(line.upper().split(), 2):
+                clue = tuple(Color(int(c)) for c in clue)
+                clue_dict = branch.setdefault(guess, {})
+                if all(c == Color.GREEN for c in clue):
+                    branch = clue_dict.setdefault(clue, None)
+                else:
+                    branch = clue_dict.setdefault(clue, {})
+
+    return tree
+
+def route_list_to_dt(routes):
+
+    tree = {}
+
+    for path in routes:
+        solution = path[-1]
+
+        branch = tree
+        for guess in path:
+            clue = get_clue_for_secret(guess, solution)
+
+            clue_dict = branch.setdefault(guess, {})
+
+            if all(c == Color.GREEN for c in clue):
+                branch = clue_dict.setdefault(clue, None)
+            else:
+                branch = clue_dict.setdefault(clue, {})
+
+    return tree
+
+def read_decision_tree_set(file):
     Node = namedtuple('Node', ['root', 'routes'])
     tree = Node({}, {})
 
@@ -108,31 +145,80 @@ def read_decision_tree_xxx(file):
 
     return top
 
-
+# XXX to delete
 # Function to map an ordinal to the corresponding value
-def map_ordinal_to_value(ordinal):
-    if 0 <= ordinal < len(values):
-        return values[ordinal]
-    else:
-        raise ValueError("Ordinal out of range")
+# def map_ordinal_to_value(ordinal):
+#     if 0 <= ordinal < len(values):
+#         return values[ordinal]
+#     else:
+#         raise ValueError("Ordinal out of range")
+
+def routes_to_text(routes):
+    """
+    """
+    return ''.join(routes_to_text_gen(routes))
+
+def routes_to_text_gen(routes):
+    """
+    """
+    lines = []
+    for path in routes:
+        tokens = []
+        solution = path[-1]
+
+        for guess in path:
+            clue_str = Color.seq_to_num_str(get_clue_for_secret(guess, solution))
+            tokens += [guess, clue_str]
+
+        yield '\t'.join(tokens) + '\n'
 
 
+def dt_to_routes(root):
+
+    stack = [((), root)]
+    routes = []
+
+    index = 0
+
+    while stack:
+        base, branch = stack.pop()
+        leg, clues = next(iter(branch.items()))
+        path = base + (leg,)
+
+        for clue, next_branch in clues.items():
+            if all(v == Color.GREEN for v in clue) and next_branch is None:
+                routes.append(path)
+            else:
+                stack.append((path, next_branch))
+
+    return routes
+
+def dt_to_text(graph, start):
+
+    # Create a stack for the nodes to visit
+    stack = [start]
+    # Create a set to keep track of visited nodes
+    # visited = set()
+
+    while stack:
+        # Pop a node from the stack
+        node = stack.pop()
+        # if node not in visited:
+
+        # Mark the node as visited
+        # visited.add(node)
+        print(node)  # Process the node (e.g., print it)
+
+        # Add all unvisited neighbors to the stack
+        for neighbor in graph[node]:
+            if neighbor not in visited:
+                stack.append(neighbor)
 
 
-
-def main_orig():
+def main():
     # Example usage
     file_path = 'decision_tree.txt'  # Replace with your file path
     root = read_decision_tree(file_path)
-
-def main():
-
-    f1 = FilterCode()
-    f2 = FilterCode()
-
-    print(f"{f1 == f2 = }")
-    print(f"{f1 = !s}")
-    print(f"{f2 = !s}")
 
 
 if __name__ == '__main__':
