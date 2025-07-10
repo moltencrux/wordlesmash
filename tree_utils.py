@@ -1,4 +1,4 @@
-from itertools import batched
+from itertools import batched, zip_longest
 from collections import namedtuple, Counter
 from dataclasses import make_dataclass
 from wordle_game import Color
@@ -61,7 +61,17 @@ def read_decision_tree(file):
 
     return tree
 
-def route_list_to_dt(routes):
+def read_decision_routes(file):
+
+    routes = []
+    with open(file, 'r') as f:
+        # for line in f:
+        routes = tuple(tuple(line.upper().split()[::2]) for line in f)
+
+    return tuple(routes)
+
+#def route_list_to_dt(routes):
+def routes_to_dt(routes):
 
     tree = {}
 
@@ -145,14 +155,6 @@ def read_decision_tree_xxx(file):
 
     return top
 
-# XXX to delete
-# Function to map an ordinal to the corresponding value
-# def map_ordinal_to_value(ordinal):
-#     if 0 <= ordinal < len(values):
-#         return values[ordinal]
-#     else:
-#         raise ValueError("Ordinal out of range")
-
 def routes_to_text(routes):
     """
     """
@@ -172,6 +174,29 @@ def routes_to_text_gen(routes):
 
         yield '\t'.join(tokens) + '\n'
 
+def verify_routes(routes, solutions):
+    """
+    Given a set of routes for a decision tree, verify the consitency against
+    a set of solutions.
+    """
+    routes = sorted(routes)
+    solutions = set(solutions)
+    route_solution_words = set(route[-1] for route in routes)
+    # Verify that there is a root to leaf route for every possible solution
+    if solutions != route_solution_words:
+        return False
+
+    # Verify that there is only one possible word choice at any node, given the
+    # clue for that node. dt_to_routes() only follows one word choice at each
+    # level, so any inconcsistencies when converting back will result in missing
+    # routes
+    
+    dt = routes_to_dt(routes)
+    out_routes = sorted(dt_to_routes(dt))
+    if routes != out_routes:
+        return False
+
+    return True
 
 def dt_to_routes(root):
 
@@ -213,6 +238,60 @@ def dt_to_text(graph, start):
         for neighbor in graph[node]:
             if neighbor not in visited:
                 stack.append(neighbor)
+
+def dt_bf_level_profile(dt):
+    profile = []
+
+    stack = [((), dt)]
+    routes = []
+
+    index = 0
+
+    while stack:
+        base, branch = stack.pop()
+        leg, clues = next(iter(branch.items()))
+        path = base + (leg,)
+
+        for clue, next_branch in clues.items():
+            if all(v == Color.GREEN for v in clue) and next_branch is None:
+                routes.append(path)
+            else:
+                stack.append((path, next_branch))
+
+    return routes
+    ...
+
+def dt_max_depth(root):
+    """
+    Finds the maximum depth of a decision tree. Currently assumes that only 1
+    pick is recommended per clue.
+    """
+
+    max_depth = 0
+    stack = [((), root)]
+
+    while stack:
+        base_picks, branch = stack.pop()
+        pick, clues = next(iter(branch.items()))
+        path = base_picks + (pick,)
+        max_depth = max(max_depth, len(path)) 
+
+        for clue, next_branch in clues.items():
+            if next_branch is not None:
+                stack.append((path, next_branch))
+
+    return max_depth
+
+def dt_max_depth_subtree(root, base_picks=(), base_clues=()):
+    subtree = root
+    top_depth = len(base_picks)
+
+    for pick, clue in zip_longest(base_picks, base_clues):
+        subtree = root[pick][clue]
+
+    return top_depth + dt_max_depth(subtree)
+
+
 
 
 def main():

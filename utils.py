@@ -24,12 +24,18 @@ def all_files_newer(set1, set2):
         return latest_time_set1 > earliest_time_set2
 
 
-
 def diff_indexes(seq1, seq2):
     """yield indices of differing elements in two sequences"""
     yield from (i for i, (a, b) in enumerate(zip(seq1, seq2)) if a != b)
 
 
+def filter_none(seq):
+    yield from filter(lambda x: x is not None, seq)
+
+def default(*args):
+    for arg in args:
+        if arg is not None:
+            return arg
 
 class LazyList(list):
     """List that fills itself lazily from an iterator"""
