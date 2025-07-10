@@ -18,7 +18,10 @@ from wordle_game import Color
 from rank_comb import generate_combination, rank_combination, rank_multiset, generate_multiset
 from solver import GuessFilter, load_word_list
 from filter_code import FilterCode
-from tree_utils import read_decision_tree, route_list_to_dt, routes_to_text, routes_to_text_gen, dt_to_routes
+from tree_utils import (read_decision_tree, read_decision_routes, dt_to_routes,
+                        routes_to_dt, routes_to_text, routes_to_text_gen,
+                        verify_routes)
+
 from wordle_game import get_clue_for_secret
 from utils import LazyList
 import cProfile
@@ -28,13 +31,14 @@ from operator import itemgetter
 import hashlib
 from traceback import format_exception_only
 from textwrap import dedent
-# from joblib import Parallel, delayed
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from joblib import Parallel, delayed, parallel_backend
+from typing import Iterable
 
-def dict_gen(seq, store):
-    for key, value in seq:
-        store[key] = value
-        yield (key, value)
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing import Event, get_context, Manager
+import random
+from sortedcontainers import SortedDict
+from math import inf
 
 
 def setup_logger(prefix=None):
@@ -42,14 +46,13 @@ def setup_logger(prefix=None):
     log_file = f"log_{pid}.log"
     logger = logging.getLogger("Wordle Tree Logger")
     logger.setLevel(logging.DEBUG)
-    handler = LazyRotatingFileHandler(prefix=prefix, filename=log_file, maxBytes=10*(1024 ** 2), backupCount=3)
+    handler = LazyRotatingFileHandler(tmpdir_prefix=prefix, basename=log_file, maxBytes=10*(1024 ** 2), backupCount=3)
     logger.addHandler(handler)
     stderr_handler = logging.StreamHandler(sys.stderr)
     logger.addHandler(stderr_handler)
     return logger
 
-logger = setup_logger()
-logger.warning()
+logger = setup_logger('wordlesmash.')
 
 class StateNode:
     # Keys a single filter state where various word options will be explored,
@@ -161,18 +164,6 @@ class StateNode:
             if guess_code not in self.option_by_guess_code:
                 self.expand_guess_code(guess_code)
                 pass
-
-    def _debug_hook(self):
-        self.expand_all_guesses()
-        for code, option, in self.option_by_guess_code.items():
-            option.expand()
-        pass # takes about 33s to do 100 passes of this.. so ~1.5h to expand allxall 1 level
-        # maybe do a subset..{of pos solutions? or answers?} say 10%  and then 
-        # kinda feel like possible solutions won't increase it that much, just
-        # maybe make it go deeper slightly
-        # but need to think about the heuristic, so that we don't expand too much
-        # the other hueristic picked the word with the most # of diff color codes
-        # so big branch factor was seen as an advantage
 
 
 
@@ -301,6 +292,7 @@ class WordleTree():
 
         self.dt = dt
 
+
     @staticmethod
     def precompute_clues(picks, solutions):
         clue_matrix = np.empty((len(picks), len(solutions)), dtype=np.uint8)
@@ -320,80 +312,191 @@ class WordleTree():
         suffix = hashlib.sha256(data).hexdigest()
         return template.format(suffix)
 
-
-    def mod_beam_search(self, candidates=None, picks=None, dt=None):
-        ''' Iterative version of mod beam search using a stack '''
-
-        # Set up solution candidates and strategic picks
+    def _fix_candidates_and_picks(self, candidates, picks):
+        '''
+        Set up solution candidates and strategic picks, converting to numeric
+        indices if a set of words was specified. Otherwise, use all posible
+        candidates and picks.
+        '''
         if candidates is not None:
-            candidates = [*map(self.word_idx.get, candidates)]
+            candidates = frozenset(map(self.word_idx.get, candidates))
         else:
-            candidates = [self.word_idx[word] for word in self.all_candidates]
+            candidates = frozenset(map(self.word_idx.get, self._all_candidates))
 
         if picks is not None:
-            picks = [*map(self.word_idx.get, picks)]
+            picks = frozenset(map(self.word_idx.get, picks))
         else:
-            picks = [self.word_idx[word] for word in self.all_picks]
+            # XXX it might should be this instead
+            picks = frozenset(map(self.word_idx.get, self._non_candidate_picks))
+            # picks = frozenset(map(self.word_idx.get, self._all_picks))
+        
+        return candidates, picks
 
-        # Set up decision tree to model 
+
+    def mod_dfs_beam_search(self, candidates=None, picks=None, pick_hist=(),
+                            clue_hist=(), dt=None, dt_depth=1, parallel=False):
+        ''' Top level wrapper for searching the Wordle pick/solution space
+        '''
+        candidates, picks = self._fix_candidates_and_picks(candidates, picks)
+
+        if pick_hist and clue_hist:
+            # Convert to numeric representation
+            pick_hist = tuple(self.word_idx[word] for word in pick_hist)
+            clue_hist = tuple(Color.ordinal(clue_str) for clue_str in clue_hist)
+
+        # Create a chain of filters to filter candidates that match only the previous
+        # picks and clues.
+        # XXX I recall we used 'seen' to filter and kinda separate candidates from picks
+        # but is it necessary?
+        pipe = candidates
+        for pick, clue in zip(pick_hist, clue_hist):
+            # pick/clue don't XXX are dynamic & come from env.  maybe need to make them params?
+            pipe = filter((lambda secret, pick=pick, clue=clue: self.clue_matrix[pick, secret] == clue), pipe)
+
+        candidates = frozenset(pipe)
+
+        # now we need to filter the picks that are still valid, i.e. don't result in
+        # one category (pick_valid)
+
+        picks = [pick for _, pick, _ in
+                 filter(self.pick_valid,
+                        self.rank_expand_picks(candidates, picks)
+                        )
+                 ]
+
         dt = self.dt if dt is None else dt
 
-        all_routes = [] # Collection of root to leaf routes
-        paths = [((), (), all_routes, [], candidates, picks)]
-        c = Counter()
+        all_routes = self.mod_dfs_beam_rec(candidates, picks, pick_hist,
+                                            clue_hist, dt, dt_depth,
+                                            parallel=parallel)
+
+        if all_routes is None:
+            return None
+        else:
+            return tuple(sorted(tuple(self.idx_word[pick] for pick in route)
+                                for route in all_routes))
 
 
-        # lambda e: (e in seen or bool(seen.add(e)))
+    def mod_dfs_beam_rec(self, candidates, picks, pick_hist=(), clue_hist=(),
+                         dt=None, dt_depth=1, best_profile=[], parallel=False,
+                         abort=None):
 
-        while paths and (path := paths.pop()):
-            pick_hist, clue_hist, routes, top_subroutes, candidates, picks = path
+        ''' Recursive version of a modified beam search
+        '''
+        # XXX I'm thiking we should check best_profile here if it's nto checked b4 call
+        # adn... the last nz should be +
 
-            if len(candidates) == 1:
-                # We've reached a solution
-                solution = pick_hist
-                if not clue_hist or clue_hist[-1] != Color.all_green():
-                    solution += (*candidates,) # avoids extra on expansion
+        logger.debug(f"Starting node for candidates: {len(candidates)}")
 
-                c.update([len(pick_hist)])
-                routes.append(solution)
+        # Create an iterator of candidates to consider for top picks
+        candidate_rank = [*self.rank_expand_picks(candidates, candidates, pick_hist)]
 
-            elif not top_subroutes:
-                # No immediate solution, need to deepen search
-                paths.append(path) # reque current path to revisit after subroutes found
-                print(f"adding top picks, level = {len(pick_hist)}, {len(candidates) = }")
+        # Create an iterator of strategic picks to consider for top picks
+        pick_rank = [*filter(self.pick_valid,
+                             self.rank_expand_picks(candidates, picks)
+                             )
+                     ]
 
-                # Create an iterator of candidates to consider for top picks
-                # results = Parallel(n_jobs=4)(delayed(process_item)(i) for i in range(10))
-                candidate_rank = list(self.rank_expand_picks(candidates,
-                                                             candidates, pick_hist))
+        new_picks = LazyList(pick for _, pick, _ in pick_rank)
+        final_route_sets = []
+        final_branch = best_profile and len(pick_hist) + 2 == len(best_profile) # XXX was # final_branch = len(pick_hist) == max_path - 1
+        logger.debug(f'{len(pick_hist) = } {len(best_profile) = }')  # XXX was # final_branch = len(pick_hist) == max_path - 1
 
-                # Create an iterator of strategic picks to consider for top picks
-                pick_rank = LazyList(filter(self.pick_valid,
-                                       self.rank_expand_picks(candidates, picks,
-                                                              pick_hist)))
+        # max_route_depth = float('inf') # this is max_path
+        for pick, clue_part in self.get_top_picks(pick_rank, candidate_rank,
+                                                  pick_hist, clue_hist, dt,
+                                                  dt_depth, final_branch):
+            if abort is not None and abort.is_set():
+                return None # Received signal from above to abort
 
-                # Capture the filtered picks in a delayed manner
-                new_picks = LazyList(pick for _, pick, _ in pick_rank)
+            routes = []
+            working_profile = best_profile.copy()
+            new_pick_hist = pick_hist + (pick,)
 
-                # tee those streams if we still need them for something
-                for pick, clue_part in self.get_top_picks(pick_rank, candidate_rank, pick_hist, dt):
-                    top_subroutes.append([])
+            batch_args = []
+            for clue, rem_candidates in clue_part.items():
 
-                    new_pick_hist = pick_hist + (pick,)
-                    for clue, new_candidates in clue_part.items():
-                        new_clue_hist = clue_hist + (clue,)
-                        paths.append((new_pick_hist, new_clue_hist,
-                            top_subroutes[-1], [], new_candidates, new_picks))
-                        # continue # maybe unecessary XXX to delete
-                        # WTF should new_picks be?
+                if len(rem_candidates) == 1:
+                    # We've reached a solution
+                    solution = new_pick_hist
+                    if clue != Color.all_green():
+                        solution += (*rem_candidates,) # avoids extra on expansion
 
-            else:
-                # Pick the subroute set with the lowest average depth
-                #routes.extend(min(top_subroutes, key=result_score))
-                routes.extend(min(top_subroutes, key=cmp_to_key(depth_cmp)))
+                    routes.append(solution)
+                    if not tally_and_test([solution], working_profile):
+                        routes = None
+                        break
+                else:
+                    # No immediate solution, need to deepen search
+                    ... # This conditional breakpoint should never happen
+                    new_clue_hist = clue_hist + (clue,)
 
-        return tuple(tuple(self.idx_word[pick] for pick in route) for route in all_routes)
+                    logger.debug(f"Eval pick: level = {len(new_pick_hist)}, " +
+                                 f"    {len(rem_candidates) = }\n" + 
+                                 f"    {[self.idx_word[p] for p in new_pick_hist]}\n" +
+                                 f"    {[Color.seq_to_num_str(Color.from_ordinal(c)) for c in new_clue_hist]}")
 
+                    # prepare a batch job: 
+                    batch_args.append((rem_candidates, frozenset(new_picks),
+                                       new_pick_hist, new_clue_hist, dt,
+                                       dt_depth)) # , abort))
+
+
+            for result in self._beam_batch_helper(batch_args, working_profile, parallel, abort):
+
+                if abort is not None and abort.is_set():
+                    return None # Received signal from above to abort
+                elif result is not None:
+                    routes.extend(result)
+                else:
+                    routes = None  # this is rq/ because we test routes
+                    break
+
+            if routes:
+                final_route_sets.append(tuple(routes))
+                # Keep the best lot of routes, although we might do this outside
+                # the loop instead for parallellism later.
+                route_depth = route_max_depth(routes)
+                # max_path = min(max_path, route_depth)
+                final_route_sets = [(min(final_route_sets, key=cmp_to_key(depth_cmp)))]
+                best_profile = depth_profile(final_route_sets[0]) # get best profile here
+                pass
+
+        return next(iter(final_route_sets), None)
+
+    def _beam_batch_helper(self, batch_args, working_profile, parallel, abort):
+
+        if parallel:
+            with Manager() as manager:
+                stop_workers = manager.Event()
+
+                with ProcessPoolExecutor(max_workers=5) as executor:
+                    futures = []
+
+                    for args in batch_args:
+                        futures.append(executor.submit(self.mod_dfs_beam_rec,
+                                                       *args, working_profile,
+                                                       abort=stop_workers))
+                    
+                    for future in as_completed(futures):
+                        result = future.result()
+                        if result is not None and tally_and_test(result, working_profile):
+                            yield result
+                        else:
+                            stop_workers.set()
+                            yield None
+                            break
+
+        else:
+            for args in batch_args:
+
+                result = self.mod_dfs_beam_rec(*args, working_profile, parallel, abort)
+
+                if result is not None and tally_and_test(result, working_profile):
+                    yield result
+                else:
+                    yield None
+                    break
 
 
     @staticmethod
@@ -404,17 +507,6 @@ class WordleTree():
         counts = Counter(clue_matrix[pick, secret] for secret in candidates)
         return [count * 2 for count in counts.values()]
 
-    @staticmethod
-    def cull_picks(pick_rank):
-        surviving_picks = []
-        for pick, (rank, clue_part) in pick_rank.items():
-            # the or part might not be necessary, but probably doesn't hurt
-            if len(clue_part) > 1 or Color.all_green() in clue_part:
-                surviving_picks.append(pick)
-                # Might make an exception for all green picks, but those should
-                # be separete as they would all be candidate (solutions)
-
-        return surviving_picks
 
     @staticmethod
     def pick_valid(item):
@@ -422,15 +514,6 @@ class WordleTree():
         clue distribution'''
         rank, pick, clue_part = item
         return len(clue_part) > 1 or Color.all_green() in clue_part
-
-
-    @staticmethod
-    def cull_picks_gen(pick_rank_gen):
-
-        for pick, rank, clue_part in pick_rank_gen:
-            if len(clue_part) > 1 or Color.all_green() in clue_part:
-                yield (pick, rank, clue_part)
-
 
 
     def get_distribution(self, candidates, pick): #, word_ns, guess_word_n, matrix):
@@ -442,17 +525,18 @@ class WordleTree():
         initial list and guess
         '''
         candidates_by_clue = {}
+        clue_candidate_set = set()
 
         for secret in candidates:
             clue = self.clue_matrix[pick, secret]
-            candidates_by_clue.setdefault(clue, []).append(secret)
+            candidates_by_clue.setdefault(clue, set()).add(secret)
+            clue_candidate_set.add((clue, secret))
 
-        # WTF, why was this necessary?
-        # for clue, words in [*candidates_by_clue.items()]:
-        #     if not words:
-        #         del candidates_by_clue[clue]
+        # freeze it
+        candidates_by_clue = {clue:frozenset(s) for clue, s in candidates_by_clue.items()}
 
-        return candidates_by_clue
+
+        return candidates_by_clue, frozenset(clue_candidate_set)
 
     def split_candidates_by_clue_alt(self, candiates, pick):
         ''' Return dict of {clue: list[candidate]} that are valid for this
@@ -475,7 +559,7 @@ class WordleTree():
         (pick, score, {clue:[candidates]})
         '''
         def split_and_score(pick):
-            clue_part = self.split_candidates_by_clue(candidates, pick)
+            clue_part, _ = self.split_candidates_by_clue(candidates, pick)
             score = score_distribution(clue_part)
             return score, pick, clue_part
 
@@ -485,7 +569,7 @@ class WordleTree():
             # Submit tasks to the executor
             future_to_item = {executor.submit(split_and_score, pick): pick for pick in picks}
             
-            # Yield results as they complete
+            # Yield results as they complete/best
             for future in as_completed(future_to_item):
                 yield future.result()
 
@@ -496,18 +580,27 @@ class WordleTree():
         #     # score = compute_heuristic(clue_part)
         #     yield (score, pick, clue_part)
 
-    def rank_expand_picks(self, candidates, picks, pick_hist):
-        '''Generate picks along with its heuristic score and a dict of
+    def rank_expand_picks(self, candidates, picks, pick_hist=None):
+        '''
+        Generate picks along with its heuristic score and a dict of
         candidates partitioned by clue. Elements are a 3-tuple of
         (pick, score, {clue:[candidates]})
         '''
 
+        seen = {}
         # currently pick_hist is not used, but maybe it should be
-        for pick in picks:
-            clue_part = self.split_candidates_by_clue(candidates, pick)
-            score = score_distribution(clue_part)
-            # score = compute_heuristic(clue_part)
-            yield (score, pick, clue_part)
+        # for pick in {*picks} - seen:
+        for pick in filter(lambda p: p not in seen, picks):
+            clue_part, part_sig = self.split_candidates_by_clue(candidates, pick)
+
+            pool = seen.setdefault(part_sig, [])
+            pool.append(pick)
+
+            if len(pool) == 1: # this pick is not folded into another yet
+                # score = score_distribution(clue_part)
+                # score = compute_heuristic(clue_part)
+                score = sorted((len(v) for v in clue_part.values()), reverse=True)
+                yield (score, pick, clue_part)
 
 
     def rank_and_group_picks(self, candidates, picks, pick_hist, dt=None, depth=2):
@@ -520,7 +613,7 @@ class WordleTree():
         candidate_rank = {}
         pick_rank = {}
 
-        print(f"{pick_hist = }, {len(candidates) = }, {len(picks) = }")
+        logger.debug(f"{pick_hist = }, {len(candidates) = }, {len(picks) = }")
         # Rank picks as candidates first as these can generate an ideal solution
         for pick in candidates:
             distribution = self.split_candidates_by_clue(candidates, pick)
@@ -538,26 +631,46 @@ class WordleTree():
         # Return the respective rankings
         return candidate_rank, pick_rank
         
-    def get_top_picks(self, pick_rank, candidate_rank, pick_hist, dt=None, depth=2):
-        '''Return top picks as ranked by a heruistic along with a dict of
-        partitioned solution candidates, keyed by clue.
-        XXX
-        recomendations from a pre-defined decision tree for the first view levels
+    def get_top_picks(self, pick_rank, candidate_rank, pick_hist, clue_hist,
+                      dt=None, depth=2, final_branch=False):
+        '''
+        Return top picks as ranked by a heruistic along with a dict of
+        partitioned solution candidates, keyed by clue. The dt parameter can
+        optionally specifiy a decision tree, which will override top picks up
+        to the specified depth.
         '''
 
-        if dt and len(pick_hist) <= depth:
-            secret, score, pick, clue_part = next(iter(candidates_rank), None)
+        # depth means we follow the dt only. Otherwise, we recommend the dt
+        # suggestion first
+
+        dt_picks = {}
+        if dt:
+            _, secret, _ = next(iter(candidate_rank), None)
             branch = dt
-            best_guess = next(iter(dt))
+            best_guess = self.word_idx[next(iter(branch))]
 
             for pick in pick_hist:
-                clue = self.clue_matrix(pick, secret)
-                branch = branch[pick][clue]
-                best_guess = next(iter(branch))
-            return [best_guess] 
+                clue = Color.from_ordinal(self.clue_matrix[pick, secret])
+                # i think this is right
+                key = self.idx_word[pick]
+                if key not in branch or clue not in branch[key]:
+                    break
+                branch = branch[self.idx_word[pick]][clue]
+                best_guess = self.word_idx[next(iter(branch))]
+
+            else:
+                candidates = [candidate for _, candidate, _ in candidate_rank]
+                clue_part, _ = self.split_candidates_by_clue(candidates, best_guess)
+                # score = score_distribution(clue_part)
+                logger.debug(f"perfect solution found at level {len(pick_hist) + 1}")
+                if len(pick_hist) < depth:
+                    return [(best_guess, clue_part)] 
+                else:
+                    dt_picks[best_guess] = clue_part
 
         # # Number of bests to check.
         # # Minimum parameters for best result are: 3,5,10,20
+
         # if len(candidate_rank) > 300:
         #     options = 3
         # elif len(candidate_rank) >= 10:
@@ -565,117 +678,82 @@ class WordleTree():
         # else:
         #     options = 20
 
+        # Sorted dict to look up the number of options configued branching factor
+        # opt_dict = SortedDict({300:5, 10:10, 0:20}) # default values
+        opt_dict = SortedDict({400:5, 50:50, 10:30, 0:40})
+        options = opt_dict.values()[opt_dict.bisect_right(len(candidate_rank)) - 1]
+
         # Minimum parameters for best result are: 3,5,10,20
         # so when there are more candidates, we actually branch less???
-        if len(candidate_rank) > 300:
-            options = 3
-        elif len(candidate_rank) >= 10:
-            options = 10
-        else:
-            options = 20
-        
-        # print(f"{options = }, {len(candidate_rank) = }, {len(picks) = }")
+        #     # options = 100
+        options = float('inf')
+        # if len(pick_hist) <= 4:
+        #     options = float('inf')
+        #     # options = 100
+        # # elif len(pick_hist) == 0:
+        # #     get_random_sample = True
+        # #     options = 5
+        # elif len(candidate_rank) > 400:
+        #     options = 10
+        # elif len(candidate_rank) >= 50:
+        #     options = 50
+        # elif len(candidate_rank) >= 10:
+        #     options = 30
+        # else:
+        #     options = 40
+
+
+        logger.debug(f"total (non-candidate) picks: {len(pick_rank)} {options = }")
+        if options > (len(pick_rank) + len(candidate_rank)):
+            logger.debug(f"search exhuasting picks & candidates at level {len(pick_hist) + 1}")
 
         allpicks = []
         # Evaluate canddiates as pick, while checkng for an ideal solution
 
         for score, pick, clue_part in candidate_rank:
             # If the solution is ideal, return it immediately
-            if (len(candidate_rank) <= len(clue_part) and all(len(n) == 1 for
+            if (len(candidate_rank) == len(clue_part) and all(len(n) == 1 for
                 n in clue_part.values())):
                 return [(pick, clue_part)]
             allpicks.append((score, pick, clue_part))
 
-        seen = {pick for _, pick, _ in allpicks}
+        # seen = {pick for _, pick, _ in allpicks}
+
         # If no ideal solution was found, add in strategic picks to consider 
         for score, pick, clue_part in pick_rank:
-            if pick not in seen:
-                allpicks.append((score, pick, clue_part))
+            # Check for near-ideal solution
+            if (len(candidate_rank) == len(clue_part) and all(len(n) == 1 for
+                n in clue_part.values())):
+                logger.debug(f"near perfect solution found at level {len(pick_hist) + 1}")
+                return [(pick, clue_part)]
+
+            allpicks.append((score, pick, clue_part))
+
+        if final_branch:  # This is the final level that will be explored, so
+            return []     # any solution must be perfect or near-perfect
         
-        print(f"{len(allpicks) =}")
+        logger.debug(f"{options = }, {len(candidate_rank) = }, {len(pick_rank) = }")
+
+        logger.debug(f"{len(allpicks) =}")
+
+        # if get_random_sample:
+        #     allpicks = random.sample(allpicks, options)
+
+        # Filter any picks that are already DT recommendations
+        allpicks = [p for p in allpicks if p[1] not in dt_picks]
+
+        # dt_tip = [(pick, clue_part) for (pick, clue_part) in dt_pick.items()]
 
         # Collect the largest n=options values
-        best_n = heapq.nlargest(options, allpicks)
-        
-        return [(pick, clue_part) for score, pick, clue_part in best_n]
-
-    def get_top_picks_old(self, candidates, pick_hist, picks, dt=None, depth=2, clue_matrix=None):
-        ''' Return top "tops" distributions with highest scores, but gives the
-        recomendations from a pre-defined decision tree for the first view levels
-        '''
-
-        if dt and len(pick_hist) <= depth:
-            secret = next(iter(candidates), None)
-            branch = dt
-            best_guess = next(iter(dt))
-            # clue = get_clue_for_secret(guess, secret)
-            for pick in pick_hist:
-                # clue = get_clue_for_secret(pick, secret)
-                clue = clue_matrix(pick, secret)
-                branch = branch[pick][clue]
-                best_guess = next(iter(branch))
-            return [best_guess]
-
-        def unique(seq, seen=set()):
-            for item in seq:
-                if item in seen:
-                    continue
-                seen.add(item)
-                yield item
-
-        def gen_picks(source):
-
-            for pick in source:
-                # if all(c == '_' for c in pick):
-                #     continue
-                distribution = self.get_distribution(candidates, pick) # word_ns, guess_n, matrix)
-                score = score_distribution(distribution)
-                yield (score, pick, distribution)
-
-        # Number of bests to check.
-        # Minimum parameters for best result are: 3,5,10,20
-        if len(candidates) > 300:
-            options = 3
-        elif len(candidates) >= 10:
-            options = 10
+        if options == float('inf'):
+            best_n = allpicks
+            best_n.sort()
+            # key=cmp_to_key(lambda x, y: dist_cmp(x[2], y[2])))
         else:
-            options = 20
-        
-        print(f"{options = }, {len(candidates) = }, {len(picks) = }")
+            best_n = sorted(heapq.nsmallest(options, allpicks))
+            # key=cmp_to_key(lambda x, y: dist_cmp(x[2], y[2])))
 
-        allpicks = []
-        bad_picks = []
-
-        # check for an ideal candidate solution first
-        for score, pick, distribution in gen_picks(candidates):
-            if len(candidates) <= len(distribution) and all(n == 1 for n in distribution):
-                return [guess] # I dont' like this b/c if n is 2, then it might not be optimal
-            allpicks.append((score, pick))
-
-        # If no ideal solution was found, add in strategic picks to consider 
-        for score, pick, distribution in gen_picks(picks):
-            if len(distribution) == 1: # this is a bad pick and needs to be culled
-                bad_picks.append(pick)
-            allpicks.append((score, pick))
-
-        # Collect the largest n values
-        best_n = [guess for (score, guess) in heapq.nlargest(options, allpicks)]
-        
-        return best_n
-
-
-
-def split_candidates_by_clue_alt(candiates, pick):
-    ''' Return dict of {clue: candidate} that are valid for this
-    initial list and guess
-    '''
-    candidates_by_clue = defaultdict(default_factory=list)
-
-    for pick in candidates:
-        candidates_by_clue[get_clue_for_secret(secret)].append(secret)
-
-    return candidates_by_clue
-
+        return [*dt_picks.items()] + [(pick, clue_part) for score, pick, clue_part in best_n]
 
 
 
@@ -688,8 +766,6 @@ def score_distribution(distribution):
 def compute_heuristic(clue_part):
 
         # Compute entropy
-        # counts = np.bincount(clues, minlength=243)  # 243 possible clues
-        # counts = counts[counts > 0]  # Non-zero counts
         counts = np.fromiter((len(v) for k, v in clue_part.items()), dtype=int)
 
         if len(counts) <= 1:  # Single clue pattern
@@ -698,60 +774,120 @@ def compute_heuristic(clue_part):
         entropy = -np.sum(probs * np.log2(probs))
         return entropy
 
+def dist_cmp(clue_part1, clue_part2):
+    """
+    A heuristic comparison of two pick distributions. Less than is considered
+    better.
+    """
+    cp1 = sorted((len(v) for v in clue_part1.values()), reverse=True)
+    cp2 = sorted((len(v) for v in clue_part2.values()), reverse=True)
+    return cp1 < cp2
 
-
-def mod_beam_search_rec(state, previous_guesses, ct=Counter()):
-    ''' main recursive function
-    '''
-
-    final_result = None
-    print (f"Starting new node for the list of {len(state.filter.candidates)}")
-    best_guesses = get_top_picks(state) # , previous_guesses, guess_words_ns)
-    print (f"Best  are: {best_guesses}")
-    for i, best_guess in enumerate(best_guesses):
-    
-        out = []
-    
-        on = state.expand_guess(best_guess)
-        answers = on.expand()
-    
-        #           new_list
-        for answer, new_state in answers.items():
-            if len(new_state.filter.candidates) == 1 or answer == (Color.GREEN,) * 5:
-                out.append(list(previous_guesses))
-        
-                if answer != (Color.GREEN,) * 5:
-                    out[-1].append(best_guess)
-                out[-1].append(new_state.filter.candidates[0])
-                ct.update([len(out[-1])])
-
-            else:
-                new_state.filter.update_picks()
-                out += mod_beam_search_rec(new_state,
-                                tuple(list(previous_guesses) + [best_guess]))
-
-        if final_result is None or result_length(out) < result_length(final_result):
-            final_result = out
-
-    return final_result
 
 
 def result_score(results):
-    return (result_max_depth(results), (result_length(results)))
+    return (route_max_depth(results), (result_length(results)))
 
 # comparator
 def depth_cmp(r1, r2):
-    c1 = Counter(len(path) for path in r1)
-    c2 = Counter(len(path) for path in r1)
+    # A None in the routes will be regarded as an aborted route
 
-    for key in sorted(c1.keys() | c2.keys(), reverse=True):
-        if s1.get(key, 0) > s2.get(key, 0):
+    if r2 is None or None in r2:
+        if r1 is None or None in r1:
+            return 0
+        else:
+            return -1
+    elif r1 is None or None in r1:
+        return 1
+
+    r1_cts = Counter(len(path) for path in r1)
+    r2_cts = Counter(len(path) for path in r2)
+
+    return depth_counts_cmp(r1_cts, r2_cts)
+
+
+def depth_counts_cmp(r1_cts, r2_cts):
+
+    for key in sorted(r1_cts.keys() | r2_cts.keys(), reverse=True):
+        if r1_cts.get(key, 0) > r2_cts.get(key, 0):
             return 1
-        elif s1.get(key, 0) < s2.get(key, 0):
+        elif r1_cts.get(key, 0) < r2_cts.get(key, 0):
             return -1
     return 0
 
+def depth_profile(routes):
+    """
+    Calculate the distribution of path lengths in a set of decision tree routes.
 
+    Args:
+        routes (list): A list of decision tree routes, where each route is a
+        list of nodes.
+    
+    Returns:
+        list: A list where the i-th element represents the number of paths of
+        length i.
+    """
+    counts = Counter(len(path) for path in routes)
+    # can / should we make this a tuple?
+    # return [counts.get(i, 0) for i in range(max(counts.keys()) + 1)]
+    return [counts.get(i, 0) for i in range(1, max(counts.keys()) + 1)]
+
+def depth_profile_dt(dt, pick_prefix=(), clue_prefix=()):
+
+    routes = dt_to_routes(dt)
+    return depth_profile(routes)
+
+    # I was thinking that the prefix didn't need clues, however it's possible
+    # that it is ambiguous since we don't know what the ultimate goal is and
+    # can't imply the clues b/c the solution is unknown.
+    ...
+
+    # _, secret, _ = next(iter(candidate_rank), None)
+
+    branch = dt
+    # best_guess = self.word_idx[next(iter(branch))]
+    start_depth = len(pick_prefix)
+
+    for pick, clue in zip(pick_prefix, clue_prefix):
+        # clue = Color.from_ordinal(self.clue_matrix[pick, secret])
+        # i think this is right
+        branch = branch[self.idx_word[pick]][clue]
+        # best_guess = self.word_idx[next(iter(branch))]
+
+    counts = Counter()
+
+    queue = []
+    while queue:
+        ...
+
+    candidates = [candidate for _, candidate, _ in candidate_rank]
+    clue_part, _ = self.split_candidates_by_clue(candidates, best_guess)
+    # score = score_distribution(clue_part)
+    logger.debug(f"perfect solution found at level {len(pick_hist) + 1}")
+    return [(best_guess, clue_part)] 
+
+def rotues_can_expand(rem_profile):
+    '''
+    Returns True if the route set for the specified profile can still be
+    expanded. False indicates that the partial route set is already worse
+    worse than the best known route set, and no further work should be done
+    to find out how much worse.
+    '''
+    return next((val > 0 for val in reversed(rem_profile) if val != 0), True)
+
+
+def tally_and_test(new_routes, working_profile):
+
+    if working_profile == []:
+        return True
+
+    for route in new_routes:
+        if len(route) > len(working_profile) - 1:
+            working_profile.extend([0] * (len(route) - len(working_profile)))
+            
+        working_profile[len(route) - 1] -= 1
+
+    return rotues_can_expand(working_profile)
 
 def result_length(results):
     ''' Len of this result (sum of the 2nd levels lengths)
@@ -760,71 +896,134 @@ def result_length(results):
     # This is essentially the average depth # or average depth * total branches
     # can we speed it up?
 
-def result_max_depth(results):
+def route_max_depth(results):
+    if results is None:
+        return float('inf')
     return max(len(r) for r in results)
 
+def test_setup(picks_file='wordle_words.txt', solutions_file='wordle_solutions.txt'):
+    lexicon = load_word_list(picks_file) # 14855 words
+    candidates = load_word_list(solutions_file) # 2315 words
+    tree = WordleTree(candidates, lexicon, None)
+    return tree
 
-def main():
-
-    state_store = {}
-    option_store = {}
+def run_test(tree, pick_hist=(), clue_hist=(), dt=None, dt_depth=1, parallel=True,
+             filename='output_dt.txt'):
 
     def timeit_capture(stmt):
         import timeit
         return_vals = []
         time_result = timeit.timeit(lambda: return_vals.append(stmt()), number=1)
         return return_vals[0], time_result
+    logger.debug("Starting new search...")
+
+    stmt = lambda: tree.mod_dfs_beam_search(None, None, pick_hist,
+                                            clue_hist, dt=dt, dt_depth=dt_depth,
+                                            parallel=parallel)
+
+    routes, time = timeit_capture(stmt=stmt)
+    logger.debug(f"Search complete. Time elapsed: {time:.4}")
+
+    if not verify_routes(routes, tree._all_candidates):
+        logger.debug("Routes not verified, incomplete.")
+    else:
+        logger.debug("Routes verified.")
+
+    # dt_out = routes_to_dt(routes)
+    # out_routes = dt_to_routes(dt_out)
+
+    prof = depth_profile(routes)
+    prof_dict = {i:prof[i] for i in range(len(prof))}
+    # del prof_dict[0]
+
+    logger.debug('='* 72 + '\n' +
+                 dedent(f'''
+                 Average depth: {sum(len(r) for r in routes) / len(routes):.6}
+                 Maximum depth: {max(len(r) for r in routes)}
+                 Profile {prof_dict}
+                 ''').strip() + '\n' +
+                 '=' * 72)
+
+    with open(filename, 'wt') as f:
+        f.writelines(routes_to_text_gen(routes))
+    pass
 
 
-    dt = read_decision_tree('tmp/decision_tree.txt')
+def exp_main():
 
-    # lexicon = load_word_list('wordle_words.txt') # 14855 words
-    candidates = load_word_list('wordle_solutions.txt') # 2315 words
+    # dt = read_decision_tree('dtree/output_dt_rance.5.txt')
+    # dt = {'CARNE':{}}
+    dt = {'RANCE':{ Color.from_ordinal(Color.ordinal('10001')):{'FOIST':{}}}}
 
+    tree = test_setup('wordle_words.txt', 'wordle_solutions.txt')
 
-    lexicon = load_word_list('default_words.txt')
+    # lexicon = load_word_list('default_words.txt')
+    # lexicon = load_word_list('wordle_solutions.txt') # 2315 words
+    # lexicon = load_word_list('wordle_sample.txt') # 232 words
+    # candidates = load_word_list('wordle_sample.txt') # 232 words
+
+    # lexicon = load_word_list('default_words.txt')
     # lexicon = load_word_list('wordle_solutions.txt') # 2315 words
 
     # lexicon = load_word_list('wordle_sample.txt') # 232 words
     # candidates = load_word_list('wordle_sample.txt') # 232 words
 
-    tree = WordleTree(candidates, lexicon, None)
 
-    # gf = GuessFilter(length=5, lexicon=lexicon, candidates=candidates)
-    # gf.update_candidates() # unecessary.. instantiation should do it
-    # root = StateNode(state_store, option_store, gf)
-    # state_store[root.id] = root
-    # result = mod_beam_search_rec(root, [])
-    results = []
-    # print("Starting search...")
-    # result, time = timeit_capture(stmt=lambda: mod_beam_search(root, dt))
-    # print(f"Search complete. Time: {time}")
-    # results.append(result)
+    pick_hist = ('RANCE',)
+    clue_sub_hist = ('00000', '00001', '00002', '00010', '00011', '00012',
+                     '00020', '00021', '00022', '00100', '00101', '00102',
+                     '00110', '00111', '00112', '00120', '00122', '00200',
+                     '00201', '00202', '00210', '00220', '00221', '00222',
+                     '01000', '01001', '01002', '01010', '01011', '01012',
+                     '01020', '01021', '01022', '01100', '01101', '01102',
+                     '01110', '01111', '01120', '01121', '01200', '01201',
+                     '02000', '02001', '02002', '02010', '02011', '02012',
+                     '02020', '02022', '02100', '02101', '02102', '02110',
+                     '02200', '02201', '02202', '02210', '02212', '02220',
+                     '02222', '10000', '10001', '10002', '10010', '10011',
+                     '10012', '10020', '10021', '10022', '10100', '10101',
+                     '10102', '10110', '10111', '10112', '10200', '10201',
+                     '10202', '11000', '11001', '11002', '11010', '11011',
+                     '11012', '11020', '11022', '11100', '11101', '11102',
+                     '11110', '11112', '11200', '12000', '12001', '12002',
+                     '12010', '12011', '12012', '12020', '12022', '12100',
+                     '12110', '12200', '12201', '20000', '20001', '20002',
+                     '20010', '20011', '20021', '20100', '20101', '20201',
+                     '20202', '21000', '21001', '21011', '21020', '21021',
+                     '21201', '22000', '22001', '22002', '22011', '22100',
+                     '22101', '22200', '22202', '22220')
+                
 
-    # print("Starting search recursive...")
-    # result, time = timeit_capture(stmt=lambda: mod_beam_search_rec(root, []))
-    # print(f"Search complete. Time: {time}")
-    # results.append(result)
+    # pick_hist = ('SALET', 'ROWND', 'PUBIC')
+    # clue_hist = ('00020', '10000', '22000')
+    # pick_hist = ('SALET', 'ROWND')
+    # clue_hist = ('00020', '10000')
 
-    print("Starting search new...")
-    #result, time = timeit_capture(stmt=lambda: mod_beam_search_opt(candidates, lexicon, dt))
-    result, time = timeit_capture(stmt=lambda: tree.mod_beam_search(candidates, lexicon, None))
-    print(f"Search complete. Time: {time}")
-    print(json.dumps(result))
-    results.append(result)
-    dt_out = route_list_to_dt(result)
-    # print(json.dumps(dt_out)) # fix this.. problem of tuples, not Enum
-    out_routes = dt_to_routes(dt_out)
-    print ("Average depth:", sum(len(r) for r in out_routes) / len(out_routes))
-    with open('output_dt.txt', 'wt') as f:
-        f.writelines(routes_to_text_gen(out_routes))
-    pass
+    for clue in clue_sub_hist:
+        print("===========================================================")
+        run_test(tree, pick_hist, (clue,), dt=dt, dt_depth=1, parallel=True,
+                 filename=f'output_dt_rance_{clue}.txt')
+        print("===========================================================")
+
+
+def main():
+
+    dt = read_decision_tree('dtree/output_dt_rance.5.txt')
+    dt = {'CARNE':{}}
+    dt = {'SALET':{}}
+    # dt = {'LATTE':{}}
+    # dt = {'CARET':{}}
+    # HEART, CREST, DIRGE, SPITE, SINGE, RATEL, LATER, RAISE, ALTER, OLATE, URAEI, OURIE
+    # SPORE, RESIN, HAIRY, LEASH, OAKEN, ALTER
+
+    # dt = read_decision_tree('dtree/output_dt_rance.txt')
+    run_test(dt=dt, dt_depth=1,  parallel=True)
 
 
 if __name__ == '__main__':
-    cProfile.run('main()', 'output.prof')
+
+    cProfile.run('exp_main()', 'output.prof')
 
     p = pstats.Stats('output.prof')
     p.strip_dirs().sort_stats('cumulative').print_stats(35)  # Show top 10 functions
 
-    # main()
