@@ -23,7 +23,41 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
-      <layout class="QHBoxLayout" name="horizontalLayout">
+      <layout class="QHBoxLayout" name="horizontalLayout_2">
+       <item>
+        <widget class="QFrame" name="spinnerFrame">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>30</width>
+           <height>30</height>
+          </size>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <item>
+           <widget class="QtWaitingSpinner" name="waitingSpinner" native="true">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>30</width>
+              <height>30</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
        <item>
         <widget class="QLabel" name="titleLabel">
          <property name="sizePolicy">
@@ -1050,6 +1084,7 @@
     </item>
    </layout>
   </widget>
+  <widget class="QStatusBar" name="statusBar"/>
  </widget>
  <customwidgets>
   <customwidget>
@@ -1060,6 +1095,12 @@
     <slot>onListItemSelected(QListWidgetItem*)</slot>
     <slot>onVirtualKeyPressed()</slot>
    </slots>
+  </customwidget>
+  <customwidget>
+   <class>QtWaitingSpinner</class>
+   <extends>QWidget</extends>
+   <header>ui/QtWaitingSpinner/waitingspinnerwidget.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <tabstops>

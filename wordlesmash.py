@@ -1,9 +1,10 @@
 #!/usr/bin/env -S python3 -O
 import logging, sys, os
-from PyQt6.QtCore import QCoreApplication, QSettings, Qt, pyqtSlot, pyqtSignal
+from PyQt6.QtCore import (QCoreApplication, QSettings, Qt, pyqtSlot, pyqtSignal,
+                          QObject, QThread)
 
 from PyQt6.QtWidgets import QApplication, QMainWindow
-
+from PyQt6.QtGui import QColorConstants
 from importlib.resources import files
 from pathlib import Path
 from utils import all_files_newer
@@ -51,56 +52,108 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         # FormulaList.setSettings(self.settings) I don't think this is necessary
         self.initUI()
 
-        self.guess = GuessManager(filename='default_words.txt', length=5)
-        # self.guess = DecisionTreeGuessManager(filename='decision_tree.txt')
-        self.updateSuggestionLists()
-        # hook stuff up
-        # what is the connect signall?
+        print(f'{type(self.waitingSpinner) = }')
+        self.setSpinnerProperties()
+        # self.guess = GuessManager(filename='default_words.txt', length=5)
+        self.guess = DecisionTreeGuessManager('wordle_picks.txt',
+                                              'wordle_candidates.txt',
+                                              'dtree/output_dt_rance.5.txt')
+
+        self.onWordSubmitted()
 
         self.guessDisplay.wordSubmitted.connect(self.onWordSubmitted)
         self.guessDisplay.wordWithdrawn.connect(self.onWordWithdrawn)
         self.resetButton.clicked.connect(self.onResetGame)
 
+    # @pyqtSlot why is this broken?
     def updateSuggestionLists(self):
+        """This should be called when the suggestions are ready"""
 
-        result = self.guess.get_suggestions()
-        strategic = result['narrowers']
-        answers = result['candidates']
+        self.waitingSpinner.stop()
+        self.statusBar.showMessage('Suggestions ready!')
+        sender = self.sender()
+
+        if isinstance(sender, SuggestionGetter):
+            picks = sender.picks
+            candidates = sender.candidates
+        else:
+            logging.debug(type(sender))
 
         self.strategicListWidget.clear()
-        for s in strategic:
+        for s in picks:
             self.strategicListWidget.addItem(s)
 
 
         self.solutionListWidget.clear()
-        for s in answers:
-            self.solutionListWidget.addItem(s)
+        for c in candidates:
+            self.solutionListWidget.addItem(c)
+
+        self.guessDisplay.setSubmitEnabled(True)
+        self.key_ENTER.setEnabled(True)
 
 
-    def onWordSubmitted(self, word, colors_hex):
+    # @pyqtSlot wtf?
+    def onWordSubmitted(self, word_hist=None, colors_hist=None):
         """Slot to handle wordSubmitted signal."""
 
-        color_map = {'#000000': Color.BLACK, '#6aaa64': Color.GREEN, "#c9b458": Color.YELLOW}
+        self.guessDisplay.setSubmitDisabled(True)
+        self.waitingSpinner.start()
+        self.key_ENTER.setDisabled(True)
 
-        colors = tuple(color_map.get(c, Color.UNKNOWN) for c in colors_hex)
+        if word_hist is not None and colors_hist is not None:
+
+            word = word_hist[-1]
+            colors_hex = colors_hist[-1]
+
+            color_map = {'#000000': Color.BLACK, '#6aaa64': Color.GREEN, "#c9b458": Color.YELLOW}
+
+            colors = tuple(color_map.get(c, Color.UNKNOWN) for c in colors_hex)
+        else:
+            word = None
+            colors = None
 
         print(f"Received wordSubmitted: '{word} {colors}'")
 
         self.guess.update_guess_result(word, colors)
-        self.updateSuggestionLists()
+        self.spawnSuggestionGetter()
+
+
+    def spawnSuggestionGetter(self):
+
+        # Create a thread that will launch a search
+        getter = SuggestionGetter(self)
+        getter.finished.connect(self.updateSuggestionLists)
+        getter.start()
+        self.statusBar.showMessage('Rebuilding decision tree...')
+
+
+    def setSpinnerProperties(self):
+
+        self.waitingSpinner.setRoundness(70)
+        self.waitingSpinner.setMinimumTrailOpacity(15)
+        self.waitingSpinner.setTrailFadePercentage(70)
+        self.waitingSpinner.setNumberOfLines(12)
+        self.waitingSpinner.setLineLength(10)
+        self.waitingSpinner.setLineWidth(5)
+        self.waitingSpinner.setInnerRadius(10)
+        self.waitingSpinner.setRevolutionsPerSecond(1)
+        self.waitingSpinner.setColor(QColorConstants.Gray)
+
+
+
 
     @pyqtSlot()
     def onWordWithdrawn(self):
         print('onWordWithdrawn called')
         self.guess.undo_last_guess()
-        self.updateSuggestionLists()
+        self.spawnSuggestionGetter()
 
     @pyqtSlot()
     def onResetGame(self):
         print('onResetGame called')
         self.guessDisplay.clear()
         self.guess.reset()
-        self.updateSuggestionLists()
+        self.spawnSuggestionGetter()
 
 
     def initUI(self):
@@ -108,10 +161,29 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.guessDisplay.setFocus()
 
 
-
     def _on_load_finished(self):
         ...
 
+    def _initGuessManager(self):
+        ...
+
+    @pyqtSlot()
+    def updateGuessManager(self):
+        sender = self.sender()
+        if isinstance(sender, GuessManagerInitializer):
+            self.guess = sender.guess
+
+class SuggestionGetter(QThread):
+    ready = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.picks = []
+        self.candidates = []
+
+    def run(self):
+        self.picks, self.candidates = self.parent().guess.get_suggestions()
+        self.ready.emit()
 
 
 if __name__ == '__main__':
