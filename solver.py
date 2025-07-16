@@ -5,11 +5,12 @@ from string import ascii_uppercase
 from heapq import nsmallest, nlargest
 from call_counter import call_counter
 from wordle_game import Color
+from wordle_tree import WordleTree
 from itertools import chain, islice
 from abc import ABCMeta, abstractmethod, abstractclassmethod
-from tree_utils import read_decision_tree_set
+from tree_utils import read_decision_tree, routes_to_dt
 import numpy as np
-from utils import diff_indexes
+from utils import diff_indexes, load_word_list
 from or_matrix import compute_or_matrix, is_or_matrix, find_closed_components
 from filter_code import FilterCode
 from scipy.sparse import lil_matrix
@@ -103,20 +104,6 @@ if __name__ == "__main__":
 
 
 
-letter_prop = {'E': 56.88, 'M': 15.36, 'A': 43.31, 'H': 15.31, 'R': 38.64, 'G':
-12.59, 'I': 38.45, 'B': 10.56, 'O': 36.51, 'F': 9.24, 'T': 35.43, 'Y': 9.06,
-'N': 33.92, 'W': 6.57, 'S': 29.23, 'K': 5.61, 'L': 27.98, 'V': 5.13, 'C': 23.13,
-'X': 1.48, 'U': 18.51, 'Z': 1.39, 'D': 17.25, 'J': 1.0, 'P': 16.14, 'Q': 1.0}
-
-starting_words = ['KIOEA', 'AOIFE', 'AUETO', 'AEONS', 'AOTES', 'STOAE', 'AROSE',
-'OREAS', 'SEORA', 'AESIR', 'ARIES', 'ARISE', 'RAISE', 'SERAI', 'ALOES', 'ALOSE',
-'OSELA', 'SOLEA', 'OUSIA', 'AUREI', 'URAEI', 'HOSEA', 'OSHEA', 'AISLE', 'ELIAS',
-'SAITE', 'TAISE', 'ANISE', 'INSEA', 'SIENA', 'SINAE', 'ORIAS', 'ACIES', 'SAICE',
-'AESOP', 'PASEO', 'PSOAE', 'OSAGE', 'OUABE', 'HEIAU']
-
-def load_word_list(filename):
-        with open(filename) as f:
-            return tuple(line.split(maxsplit=1)[0] for line in f if line)
 
 
 
@@ -146,341 +133,6 @@ def load_word_list(filename):
 # as As we are sure is in the word, then we can narrow down the word.
 # 
 
-class HeftyGuessFilter:
-
-    def __init__(self, length=5, lexicon=None):
-
-        self.length = length # length of the word
-        self._lexicon = lexicon # the dictionary of words being considered as possibilities
-        self.unplaced = length # ?number of letters that are still undetermined?
-        self.qty_mins = {c: 0 for c in ascii_uppercase} # minimum number of each character that must be present for a guess to be valid
-        self.qty_maxes = {c: length for c in ascii_uppercase} # maximum number of each letter that can be present and the word still be valid
-        self.required = set() # letters that must be present for a word to be valid
-        self.forbidden = set() # letters that must not be present for a word to be valid
-        self.slots = [set(ascii_uppercase) for _ in range(length)] # sets of possibly valid characters for each position in the word
-        self.char_slots = {c: set(range(length)) for c in ascii_uppercase} # XXX redundant?
-        self.candidates = self._lexicon # remaining words that are still valid based on filters
-
-    def clone_state(self, source):
-        self.length = source.length
-        self.unplaced = source.unplaced
-        self.qty_mins = source.qty_mins.copy()
-        self.qty_maxes = source.qty_maxes.copy()
-        self.required = source.required.copy()
-        self.forbidden = source.forbidden.copy()
-        self.slots = [slot.copy() for slot in source.slots]
-        self.char_slots = {c:s.copy() for (c, s) in source.char_slots.items()}
-        self._lexicon = source._lexicon
-        self.candidates = source.candidates
-
-
-    @classmethod
-    def from_source(cls, source):
-        new = cls(length=source.length)
-        new.clone_state(source)
-        return new
-
-    @classmethod
-    def from_filter_code(cls, code):
-        # self.blacklist # blacked characters..
-        # self.hit_chars
-        # self.hit_mask
-
-        # self.length = source.length
-        # self.unplaced = source.unplaced
-        # self.qty_mins = source.qty_mins.copy()
-        # self.qty_maxes = source.qty_maxes.copy()
-        # self.required = source.required.copy()
-        # self.forbidden = source.forbidden.copy()
-        # self.slots = [slot.copy() for slot in source.slots]
-        # self.char_slots = {c:s.copy() for (c, s) in source.char_slots.items()}
-        # self._lexicon = source._lexicon
-        # self.candidates = source.candidates
-
-
-
-        # update based on blacklist & counts
-        for c,i in char_ord.items():
-            for slot in new.char_slots:
-                slot.remove(c)
-            if code.blacklist[char_ord[c]]:
-                new.required.remove(c)
-                # set max to # in color list
-                max_count = code.hit_chars.count(c)
-                new.qty_maxes[c] = max_count
-                if max_count == 0:
-                    new.forbidden.add(c)
-                else:
-                    new.required.add(c)
-
-        # update based on hit_mask / YG lists
-        for c, mask in zip(code.hit_chars, code.hit_mask, code.is_green):
-            new.qty_mins[c] += 1
-
-            ### not sure about this
-            for k in new.qty_maxes:
-                if k != c:
-                    new.qty_maxes -= 1
-
-            #if code.hit_mask:
-                # maybe reduce qty maxes of et else?
-            #...
-        
-        # now.. what about maxes that come from a black dup char on a guess?
-        # should filter code have a blacklist for unknowns?
-        # how about all that derived stuff?
-        # allow for inconsistent masks on dup chars maybe?
-        # or maybe, force them to be different?
-        # maybe a blacklist of a color can denote that all y/g have been found.
-        # and that their number is exactly known. and that their min/max is
-        # just the # of occurances in the hit_list.
-
-        # dups in the color/hit_list .  (maybe have 1st flags as canonical mask)
-        #    makes it easy and 2nd is what.. min/max ct?
-        # what if we have a special char that means dup? but i t can't be ordered.
-        # but.. we do have 4 slots, we have. .. 27/28-31 5 vals to denote a dup 
-        # so the mask in each slot [n] will denote the mask for rank n known char.
-        # but what if we have a green?  it could also be in other slots.
-        # we don't know for sure it's not in others.
-
-        # maybe a yellow in 1 slot is a green. And dups will refer to the 2nd 
-        # mask.
-
-        # 3 dups means can have 1 undetermiend slot (2G + 1Y)
-        # 4 dups is known
-        # 2 Y dups
-        # if 2 dups.. 1st 1s could indiacte closed & 2nd indicate greens
-        # we could say that 1 open indicate gn. BUT.. we don't know if others
-        # are really closed. In that case, blacklist would still be open.
-        # Gn indicated by 1 open on mask & char open on blacklist.
-        # mult Gns indicated by individual 1 on its mask. blacklist is either.
-        # G + y is one open for the Gns, & Y would have 1 on missed + known GN
-        #
-        # so in the case of Dups, the 2nd mask becomes a Green/known list.
-        # in maain blacklist means upper limit count known & it is # in the
-        # GY list.
-
-        return new
-
-    @staticmethod
-    def make_colors(target, guess):
-        target_counts = Counter(target)
-        guess_counts = Counter(guess)
-
-        # so if guess has qty above target, we need to have a black for that one
-        # mark et green or orange first
-        # so mark the rightmost non-green ones i guess
-        black = {c: qty - target_counts.get(c, 0) for c, qty in guess_counts.items()}
-
-        result = [Color.GREEN if t == c else Color.YELLOW for (t, c) in zip(target, guess)]
-
-        for i in range(reversed(len(result))):
-            if result[i] == Color.YELLOW and black[guess[i]] > 0:
-                black[guess[i]] -= 1
-                result[i] = Color.BLACK
-
-
-        return result
-
-    def matches_slot_map(self, word):
-        '''
-        Determines whether a word guess could be the target word according to
-        the posititional whitelist
-        '''
-        return all(l in slot for (l, slot) in zip(word, self.slots))
-
-    
-    def fulfills_mins(self, word):
-        '''
-        Checks to see if a particular word contains all the minimum
-        multiplicities for each letter that have been determined to be in the
-        solution '''
-        has = Counter(word)
-        return all(has.get(c, 0) >= self.qty_mins[c] for c in self.required)
-
-
-    def within_maxes(self, word):
-        '''
-        Checks to see if a particular word does not contain more than the
-        maximum multiplicities of any letters that have been determined to be in
-        the solution
-        '''
-        has = Counter(word)
-        return all(qty <= self.qty_maxes[c] for (c, qty) in has.items())
-
-
-    def guess_valid(self, word):
-        '''
-        Determines whether a particular guess could be the target word
-        '''
-        return (self.fulfills_mins(word) and self.within_maxes(word) and
-                self.matches_slot_map(word))
-        
-
-    def score(self):
-        return len(self.candidates)
-
-
-    def update_candidates(self):
-        backup = self.candidates
-        self.candidates = tuple(filter(self.guess_valid, self.candidates))
-        # self.update_frequencies()
-        if len(self.candidates) == 0:
-            pass
-
-    def update_filters(self, word, colors):
-        # XXX another idea, what if we kept both a slots, and
-        # dict (c,set) of numercal slots possibly held by each letter?
-        # the size would say something about the max count
-        # maybe have a hard max tracker for any black squares seen
-
-        # XXX ooo.. just thoght that maybe we should treat orange dff than blk in
-        # update filters maybe.. cuz you could get a black on a letter, but 
-        # not need to put it in forbidden if it's the 2nd or 3rd
-        counts = Counter(word)
-        match_count = {}
-        mismatch_count  = {}
-        if isinstance(colors, str):
-            colors = [Color.map(c) for c in colors]
-
-        for pos, (c, color, slot) in enumerate(zip(word, colors, self.slots)):
-            if color == Color.GREEN:
-                slot &= {c}
-                match_count[c] = match_count.get(c, 0) + 1
-            elif color == Color.BLACK:
-                slot.discard(c)
-                # for new maxes
-                mismatch_count[c] = mismatch_count.get(c, counts[c]) - 1
-                self.char_slots[c].discard(pos)
-                # update restricted and requried maybe
-            elif color == Color.YELLOW:
-                slot.discard(c)
-                match_count[c] = match_count.get(c, 0) + 1
-                self.char_slots[c].discard(pos)
-                # update required somehow
-
-        # update required and restriction letter multiplicites
-        for c, qty in match_count.items():
-            self.qty_mins[c] = max(self.qty_mins.get(c, 0), qty)
-            self.required.add(c)
-
-        for c, qty in mismatch_count.items():
-            qty = min(self.qty_maxes.get(c, len(self.char_slots[c])), qty)
-            self.qty_maxes[c] = qty
-            if qty == 0 and c not in self.forbidden:
-                self.forbidden.add(c)
-                self.char_slots[c].clear()
-                for pos in self.char_slots[c]:
-                    self.slots[pos].discard(c)
-                # for slot in self.slots:
-                #     slot.discard(c)
-
-        # also need to check for the case that the multiplicites of each letter
-        # is known completely, then we can update the slots to only include possible
-        # leters.  so.. if all letters have a req in the required & excluded dicts
-
-        #for c, count in slot_count.items():
-        # c a can we jst look at slots that changed/ or chars?
-        for c in ascii_uppercase: # can we restrict to just self.required/excluded?
-            count = len(self.char_slots[c])
-
-
-            if count > 0 and count == self.qty_mins.get(c, 0):
-                for slot in self.slots:
-                    if c in slot:
-                        slot &= {c}
-
-
-
-
-        # if all the letters and their quantites are known, trim down the
-        # available letter slots
-        if sum(self.qty_mins.values()) == self.length: # this works
-            filter_set = {c for (c, val) in self.qty_mins.items() if val > 0}
-            for slot in self.slots:
-                slot &= filter_set
-
-        elif sum(self.qty_maxes.get(c, self.length) for c in ascii_uppercase) == self.length:
-            filter_set = {c for c in ascii_uppercase if self.qty_maxes.get(c, self.length) > 0}
-            for slot in self.slots:
-                slot &= filter_set
-                ...
-
-
-        # also, maybe update required to a minimum amount for a letter if it happens to be
-        # less than the number of slots occupied soley by that letter
-
-        occupied = Counter([*slot][0] for slot in self.slots if len(slot) == 1)
-        for c, qty in occupied.items():
-            self.qty_mins[c] = max(self.qty_mins.get(c, 0), qty )
-
-        # XXX idea: the maxes have to be <= the total counts in the slots
-        # how do we track that efficiently? lower it each time we see a new yellow/black?
-        #
-
-        # XXX how do we do that thing? 
-        # Counter(c for c in slot for slot in self.slots)
-        # but maybe we can just do this for required/forbidden for speed?
-        # what if we keep a char slot count for each one?
-
-        # update minimums? in exlude by slots that don't contain that letter
-        ### XXX use char_slots to do this more effiiently i think
-        occupied = Counter(c for c in slot for slot in self.slots)
-        for c, qty in occupied.items():
-            self.qty_maxes[c] = min(self.qty_maxes.get(c, self.length), qty)
-            # but is that self.length really correct if some letters are known difinitively?
-            # should we have a self.unplaced?
-        if (self.required & self.forbidden):
-            pass
-
-
-    def update_guess_result(self, word, colors):
-        self.update_filters(word, colors)
-        self.update_candidates()
-        self.narrow_filters_by_candidates()
-
-
-    def get_worst_case_guess_result(self, word):
-        # seems to be getting a list of colors that would be generated by this word
-        # in the worst possible case. I think for the purpose of heuristic scoring
-
-        counts = Counter(word)
-        # if a letter count in a word is over required, then 1 is guranetteed to be gray
-        # but is it safter to assume gray? is it possible to prove yellow?
-        # think about:
-        # slot availabe
-        # #required
-        # # restricted - if over restricted, some of tha tletter must be gray
-        # XXX idea.. check the candiates and see what colors if unknown could be?
-
-
-        result = []
-        for c, slot in zip(word, self.slots):
-            if c in slot and len(slot) == 1:
-                result.append(Color.GREEN)
-            elif c in self.required and c in slot:
-                result.append(Color.UNKNOWN)
-            else:
-                result.append(Color.BLACK)
-
-        return result
-        
-
-        # assume gray, unless letter is in required. Then assume it is yellow as
-        # long as there is more than one in the slot.
-
-
-    def narrow_filters_by_candidates(self):
-        ...
-        # This will update the filters, slot_mins/maxes based on remaining candidates
-        # max counts of ev lettter in each word
-        # min counts of ev letter in each word.. might be 1 if all letters have s at some pos
-        # slot letters
-        # conflicts with guessd filter changes???
-        # for word in self.candidates:
-        #     ...
-        #     counts = Counter(word)
-        # But i'm not sure it's actually of any value yet. 
 
 class GuessFilter:
     alphabet = dict.fromkeys(ascii_uppercase)
@@ -1070,38 +722,76 @@ class AbstractGuessManager(metaclass=ABCMeta):
         pass
 
 class DecisionTreeGuessManager(AbstractGuessManager):
-    def __init__(self, filename):
-        self.tree = read_decision_tree_set(filename)
+    def __init__(self, lexicon, candidates, dt=None, length=5):
+        # self.tree = read_decision_tree_set(filename)
+        if isinstance(lexicon, str):
+            lexicon = [w for w in load_word_list(lexicon) if len(w) == length]
+        self.lexicon = tuple(sorted(set(lexicon)))
+
+        if isinstance(candidates, str):
+            candidates = [w for w in load_word_list(candidates) if len(w) == length]
+        self.candidates = tuple(sorted(set(candidates)))
+
+        if isinstance(dt, str):
+            self.dt = read_decision_tree(dt)
+        elif isinstance(dt, (list, tuple)):
+            self.dt = routes_to_dt(dt)
+        else:
+            self.dt = dt if dt is not None else {}
+
+        self.tree = None
+
         self.reset()
 
     def reset(self):
-        self.state = []
+        # self.state = []
+        self.pick_word_hist = []
+        self.clue_color_hist = []
 
-    def update_guess_result(self, word, colors):
-        self.state.append((word, colors))
-        # self.suggestion = self.suggestion[colors]
+    def update_guess_result(self, word=None, colors=None):
+        if word and colors:
+            # self.state.append((word, colors))
+            self.pick_word_hist.append(word)
+            self.clue_color_hist.append(colors)
 
     def undo_last_guess(self):
-        self.state.pop()
+        self.pick_word_hist.pop()
+        self.clue_color_hist.pop()
 
     def get_suggestions(self):
 
-        branch = self.tree.root
-        color = ()
-        result = {'narrowers': [],
-                  'candidates': []}
+        # pick_word_hist, clue_color_hist = tuple(zip(*self.state)) or ((), ())
 
-        for word, color in self.state:
-            branch = branch[word][color]
+        if not self.tree:
+            self.tree = WordleTree(self.candidates, self.lexicon, self.dt)
 
-        suggestions = [*branch.keys()]
+        def dt_lookup():
+            branch = self.dt
+            clue = ()
 
-        if color and color == (Color.GREEN,) * len(color):
-            result['candidates'].extend(suggestions)
-        else:
-            result['narrowers'].extend(suggestions)
+            for word, clue in zip(self.pick_word_hist, self.clue_color_hist):
+                branch = branch.get(word, {}).get(clue, {})
 
-        return result
+            return [*branch.keys()]
+
+        suggestions = dt_lookup()
+
+        if not suggestions:
+            self.regenerate_tree()
+            suggestions = dt_lookup()
+
+        rem_candidates = self.tree.get_valid_candidate_words(self.pick_word_hist,
+                                                             self.clue_color_hist)
+        
+        return suggestions, rem_candidates
+
+    def regenerate_tree(self):
+
+        routes = self.tree.mod_dfs_beam_search(pick_hist=self.pick_word_hist,
+                                               clue_hist=self.clue_color_hist,
+                                               parallel=True)
+
+        self.dt = routes_to_dt(routes)
 
 
 

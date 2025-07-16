@@ -1,0 +1,3 @@
+[submodule "ui/QtWaitingSpinner"]
+	path = ui/QtWaitingSpinner
+	url = https://github.com/z3ntu/QtWaitingSpinner

@@ -82,11 +82,12 @@ class CellFrame(QFrame):
 
 class WordTableWidget(QTableWidget):
     # Custom signal for when a new row is added (word and colors submitted)
-    wordSubmitted = pyqtSignal(str, list)
+    wordSubmitted = pyqtSignal(list, list)
     wordWithdrawn = pyqtSignal()  # Renamed and simplified signal for row deletion
 
     def __init__(self, rows=1, cols=5, parent=None):
         super().__init__(rows, cols, parent)
+        self._submitEnabled = True
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -358,7 +359,7 @@ class WordTableWidget(QTableWidget):
             return
 
         # Enter: Add new row if final row is filled, regardless of focused column
-        if key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter:
+        if (key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter) and self._submitEnabled:
             if current_row == self.rowCount() - 1:
                 row_filled = all(
                     self.cellWidget(current_row, c) and self.cellWidget(current_row, c).text()
@@ -371,8 +372,9 @@ class WordTableWidget(QTableWidget):
                     # Add new row
                     new_row = self.rowCount()
                     self.insertRow(new_row)
+                    word_hist, clue_hist = self.getHistory()
                     # Emit signal with word and colors
-                    self.wordSubmitted.emit(word, colors)
+                    self.wordSubmitted.emit(word_hist, clue_hist)
                     print(f"Emitted wordSubmitted: word='{word}', colors={colors}")
                     # Set up new row
                     viewport_width = self.viewport().width()
@@ -403,7 +405,7 @@ class WordTableWidget(QTableWidget):
                 self.cellWidget(current_row, c) and not self.cellWidget(current_row, c).text()
                 for c in range(self.columnCount())
             )
-            if current_col == 0 and row_empty and self.rowCount() > 1:
+            if current_col == 0 and row_empty and self.rowCount() > 1 and self._submitEnabled:
                 print(f"Deleting empty row {current_row}")
                 self.removeRow(current_row)
                 self.wordWithdrawn.emit()
@@ -432,6 +434,25 @@ class WordTableWidget(QTableWidget):
             return
 
         super().keyPressEvent(event)
+
+    def setSubmitEnabled(self, state=True):
+        self._submitEnabled = bool(state)
+
+    def setSubmitDisabled(self, state=True):
+        self.setSubmitEnabled(not state)
+
+    def getHistory(self):
+        words = []
+        clue_colors = []
+
+        for row in range(self.rowCount() - 1):
+            # self.setRowHeight(row, cell_size)
+            word = ''.join(self.cellWidget(row, c).text() for c in range(self.columnCount()))
+            words.append(word)
+            colors = tuple(self.cellWidget(row, c).bg_color for c in range(self.columnCount()))
+            clue_colors.append(colors)
+
+        return words, clue_colors
 
 class MainWindow(QMainWindow):
     def __init__(self):
