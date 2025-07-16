@@ -2,43 +2,36 @@ import os
 import sys
 import numpy as np
 
-from itertools import batched, count, chain
-from collections import namedtuple, Counter, deque, defaultdict
-from dataclasses import dataclass, field
+from itertools import count, chain
+from collections import namedtuple, Counter, defaultdict
 from functools import partial, cmp_to_key
 import tempfile
 import heapq
 import logging
 from lazy_handler import LazyRotatingFileHandler
 
-from base64 import b64decode, b64encode
 from string import ascii_uppercase
 
 from wordle_game import Color
-from rank_comb import generate_combination, rank_combination, rank_multiset, generate_multiset
-from solver import GuessFilter, load_word_list
 from filter_code import FilterCode
 from tree_utils import (read_decision_tree, read_decision_routes, dt_to_routes,
                         routes_to_dt, routes_to_text, routes_to_text_gen,
                         verify_routes)
 
 from wordle_game import get_clue_for_secret
-from utils import LazyList
+from utils import LazyList, load_word_list
 import cProfile
 import pstats
-import json
-from operator import itemgetter
 import hashlib
 from traceback import format_exception_only
 from textwrap import dedent
 from joblib import Parallel, delayed, parallel_backend
-from typing import Iterable
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import Event, get_context, Manager
-import random
 from sortedcontainers import SortedDict
 from math import inf
+import threading
 
 
 def setup_logger(prefix=None):
@@ -250,8 +243,13 @@ class OptionNode:
         return self.state_by_result
 
 
+
+
+
+
+
 class WordleTree():
-    def __init__(self, all_candidates, all_picks, dt=None):
+    def __init__(self, all_candidates, all_picks, dt=None, branch_rules=None):
 
         # Remove duplicates and maintaining order, while guaranteeing picks
         # are the first candidates
@@ -266,6 +264,12 @@ class WordleTree():
 
         self.word_idx = {c:i for i, c in enumerate(all_picks)}
         self.idx_word = {i:c for i, c in enumerate(all_picks)}
+
+        # Minimum parameters for best result are: 3,5,10,20
+        if branch_rules is None:
+            self.branch_rules = SortedDict({300:5, 10:10, 0:20}) # these were the default paramaters
+        else:
+            self.branch_rules = SortedDict(branch_rules) # these were the default paramaters
 
         filename = self.gen_matrix_filename()
 
@@ -303,6 +307,10 @@ class WordleTree():
                 clue_matrix[i, j] = Color.ordinal(clue)
         return clue_matrix
 
+
+    def set_branch_rules(self, branch_rules):
+        self.branch_rules = SortedDict(branch_rules)
+
     def gen_matrix_filename(self, template='.cache/wordle_matrix_{}.npy'):
         ''' Hash word lists to create a suffix for a np matrix name
         '''
@@ -324,10 +332,10 @@ class WordleTree():
             candidates = frozenset(map(self.word_idx.get, self._all_candidates))
 
         if picks is not None:
-            picks = frozenset(map(self.word_idx.get, picks))
+            picks = frozenset(map(self.word_idx.get, (*candidates, *picks)))
         else:
             # XXX it might should be this instead
-            picks = frozenset(map(self.word_idx.get, self._non_candidate_picks))
+            picks = frozenset(map(self.word_idx.get, self._all_candidates))
             # picks = frozenset(map(self.word_idx.get, self._all_picks))
         
         return candidates, picks
@@ -344,25 +352,22 @@ class WordleTree():
             pick_hist = tuple(self.word_idx[word] for word in pick_hist)
             clue_hist = tuple(Color.ordinal(clue_str) for clue_str in clue_hist)
 
-        # Create a chain of filters to filter candidates that match only the previous
-        # picks and clues.
-        # XXX I recall we used 'seen' to filter and kinda separate candidates from picks
-        # but is it necessary?
+        # Create a chain of filters to filter candidates that match only the
+        # previous picks and clues.
         pipe = candidates
         for pick, clue in zip(pick_hist, clue_hist):
-            # pick/clue don't XXX are dynamic & come from env.  maybe need to make them params?
             pipe = filter((lambda secret, pick=pick, clue=clue: self.clue_matrix[pick, secret] == clue), pipe)
 
         candidates = frozenset(pipe)
 
-        # now we need to filter the picks that are still valid, i.e. don't result in
-        # one category (pick_valid)
-
+        # Filter invalid picks and deduplicate redundant picks due to
+        # pick_hist/clue_hist
         picks = [pick for _, pick, _ in
                  filter(self.pick_valid,
                         self.rank_expand_picks(candidates, picks)
                         )
                  ]
+
 
         dt = self.dt if dt is None else dt
 
@@ -384,25 +389,48 @@ class WordleTree():
         ''' Recursive version of a modified beam search
         '''
         # XXX I'm thiking we should check best_profile here if it's nto checked b4 call
-        # adn... the last nz should be +
+        # and... the last nonzero should be +
+
+        if best_profile: 
+            max_depth = len(best_profile)
+            max_depth_count = best_profile[-1]
+        else:
+            max_depth = float('inf')
+            max_depth_count = float('inf')
 
         logger.debug(f"Starting node for candidates: {len(candidates)}")
 
         # Create an iterator of candidates to consider for top picks
-        candidate_rank = [*self.rank_expand_picks(candidates, candidates, pick_hist)]
+        seen = {} # use this for folding redundant picks
+        candidate_rank = [*self.rank_expand_picks(candidates, candidates, seen, pick_hist)]
+        # XXX The seen thing.. frozenset for folding.  needs to happen accrsoss calls
+        # BUT, we wanna do canddidates first and picks in a lazy manner
+        # is REP? seen is in REP, but frozenset in Split.
+        # move frozenset gen to REP?
 
         # Create an iterator of strategic picks to consider for top picks
-        pick_rank = [*filter(self.pick_valid,
-                             self.rank_expand_picks(candidates, picks)
-                             )
-                     ]
+        unranked_picks = (pick for pick in picks if pick not in candidates)
 
-        new_picks = LazyList(pick for _, pick, _ in pick_rank)
+        # careful about scope.. candidates could be different maybe
+        pipe = self.rank_expand_picks(candidates, unranked_picks, seen)
+        for pred in [self.pick_valid]:
+            pipe = filter(pred, pipe)
+
+        # Q: why did we collapse this previously?
+        # A: b/c i think we get it into new picks before it is passed to
+        # get_top_picks
+        pick_rank = LazyList(pipe)
+
+        # should filter out candidates to expand
+        # so then can we just look at the values of _seen_ for newpicks? ? or maybe 1st
+        # value in the list? if we use _seen_ there might be a chance it gets modified
+        # before collapse.. or a r/cond or something
+
+        new_picks = LazyList(pick for _, pick, _ in chain(candidate_rank, pick_rank))
         final_route_sets = []
-        final_branch = best_profile and len(pick_hist) + 2 == len(best_profile) # XXX was # final_branch = len(pick_hist) == max_path - 1
-        logger.debug(f'{len(pick_hist) = } {len(best_profile) = }')  # XXX was # final_branch = len(pick_hist) == max_path - 1
+        final_branch = best_profile and len(pick_hist) + 1 == len(best_profile)
+        logger.debug(f'{len(pick_hist) = } {len(best_profile) = }')
 
-        # max_route_depth = float('inf') # this is max_path
         for pick, clue_part in self.get_top_picks(pick_rank, candidate_rank,
                                                   pick_hist, clue_hist, dt,
                                                   dt_depth, final_branch):
@@ -414,6 +442,14 @@ class WordleTree():
             new_pick_hist = pick_hist + (pick,)
 
             batch_args = []
+
+            if not within_l2_bounds(candidates, best_profile, new_pick_hist, clue_part):
+                # should skip
+                logger.debug(f"dropping redundant pick: {pick}")
+                continue #? or break? # continue should be good.. but maybe even break?
+                # XXX but break might not save us much really, the test is fast
+                # And I'm not sure that all subsequent picks will fail
+
             for clue, rem_candidates in clue_part.items():
 
                 if len(rem_candidates) == 1:
@@ -441,28 +477,32 @@ class WordleTree():
                                        new_pick_hist, new_clue_hist, dt,
                                        dt_depth)) # , abort))
 
+            else:
 
-            for result in self._beam_batch_helper(batch_args, working_profile, parallel, abort):
+                for result in self._beam_batch_helper(batch_args, working_profile,
+                                                    parallel, abort):
+                
+                    if abort is not None and abort.is_set():
+                        return None # Received signal from above to abort
+                    elif result is not None:
+                        routes.extend(result)
+                    else:
+                        routes = None  # this is rq/ because we test routes
+                        break
 
-                if abort is not None and abort.is_set():
-                    return None # Received signal from above to abort
-                elif result is not None:
-                    routes.extend(result)
-                else:
-                    routes = None  # this is rq/ because we test routes
-                    break
-
-            if routes:
-                final_route_sets.append(tuple(routes))
-                # Keep the best lot of routes, although we might do this outside
-                # the loop instead for parallellism later.
-                route_depth = route_max_depth(routes)
-                # max_path = min(max_path, route_depth)
-                final_route_sets = [(min(final_route_sets, key=cmp_to_key(depth_cmp)))]
-                best_profile = depth_profile(final_route_sets[0]) # get best profile here
-                pass
+                if routes:
+                    final_route_sets.append(tuple(routes))
+                    # Keep the best lot of routes, although we might do this outside
+                    # the loop instead for parallellism later.
+                    route_depth = route_max_depth(routes)
+                    # max_path = min(max_path, route_depth)
+                    final_route_sets = [(min(final_route_sets, key=cmp_to_key(depth_cmp)))]
+                    best_profile = depth_profile(final_route_sets[0]) # get best profile here
+                    max_depth = len(best_profile)
+                    max_depth_count = best_profile[-1]
 
         return next(iter(final_route_sets), None)
+
 
     def _beam_batch_helper(self, batch_args, working_profile, parallel, abort):
 
@@ -499,6 +539,41 @@ class WordleTree():
                     break
 
 
+    def get_valid_candidates(self, pick_hist=(), clue_hist=(), candidates=None):
+
+        if candidates is None:
+            candidates = map(self.word_idx.get, self._all_candidates)
+
+        print(f"{pick_hist = }") 
+        print(f"{clue_hist = }") 
+        candidates = list(candidates)
+        print(f'{candidates[:5] = }')
+        if None in candidates:
+            raise ValueError
+
+        pipe = candidates
+        for pick, clue in zip(pick_hist, clue_hist):
+            print(f'{pick = } {clue = }')
+            pipe = filter((lambda secret, pick=pick, clue=clue: self.clue_matrix[pick, secret] == clue), pipe)
+
+        return frozenset(pipe)
+
+    def get_valid_candidate_words(self, pick_word_hist=(), clue_color_hist=(),
+                                  candidates=None):
+        print(f'{pick_word_hist = }')
+        print(f'{clue_color_hist = }')
+        pick_hist = tuple(map(self.word_idx.get, pick_word_hist))
+        clue_hist = tuple(map(Color.ordinal, clue_color_hist))
+        if candidates is not None:
+            candidates = map(self.word_idx.get, candidates)
+
+        rem_candidates = self.get_valid_candidates(pick_hist, clue_hist, candidates)
+
+        return frozenset(map(self.idx_word.get, rem_candidates))
+
+
+
+
     @staticmethod
     def _get_distribution(candidates, pick, clue_matrix):
         ''' get list of sizes of resulting wordlist, after splitting
@@ -521,22 +596,20 @@ class WordleTree():
         return self._get_distribution(candidates, pick, self.clue_matrix)
 
     def split_candidates_by_clue(self, candidates, pick):
-        ''' Return dict of {clue: list[candidate]} that are valid for this
+        ''' Return dict of {clue: set[candidate]} that are valid for this
         initial list and guess
         '''
         candidates_by_clue = {}
-        clue_candidate_set = set()
 
         for secret in candidates:
             clue = self.clue_matrix[pick, secret]
-            candidates_by_clue.setdefault(clue, set()).add(secret)
-            clue_candidate_set.add((clue, secret))
+            candidates_by_clue.setdefault(clue, []).append(secret)
 
-        # freeze it
-        candidates_by_clue = {clue:frozenset(s) for clue, s in candidates_by_clue.items()}
+        # Freeze all values
+        for clue, can in candidates_by_clue.items():
+            candidates_by_clue[clue] = frozenset(can)
 
-
-        return candidates_by_clue, frozenset(clue_candidate_set)
+        return candidates_by_clue
 
     def split_candidates_by_clue_alt(self, candiates, pick):
         ''' Return dict of {clue: list[candidate]} that are valid for this
@@ -580,18 +653,25 @@ class WordleTree():
         #     # score = compute_heuristic(clue_part)
         #     yield (score, pick, clue_part)
 
-    def rank_expand_picks(self, candidates, picks, pick_hist=None):
+    def rank_expand_picks(self, candidates, picks, seen=None, pick_hist=None):
         '''
         Generate picks along with its heuristic score and a dict of
         candidates partitioned by clue. Elements are a 3-tuple of
         (pick, score, {clue:[candidates]})
         '''
-
-        seen = {}
+        seen = seen if seen is not None else {}
         # currently pick_hist is not used, but maybe it should be
         # for pick in {*picks} - seen:
         for pick in filter(lambda p: p not in seen, picks):
-            clue_part, part_sig = self.split_candidates_by_clue(candidates, pick)
+            clue_part = self.split_candidates_by_clue(candidates, pick)
+            part_sig = frozenset(clue_part.items())
+            # XXX I am consdering leaving out the specific clue for the part_sig
+            # part_sig = frozenset(clue_part.values())
+            # because I _think_ that the clue that led to that subset of picks is
+            # not relevant, as distinct guesses with different clues could lead to
+            # the same subset, and probably the same information is known about them
+            # But I'm not sure if that could lead to problems with route generation
+            #
 
             pool = seen.setdefault(part_sig, [])
             pool.append(pick)
@@ -660,7 +740,7 @@ class WordleTree():
 
             else:
                 candidates = [candidate for _, candidate, _ in candidate_rank]
-                clue_part, _ = self.split_candidates_by_clue(candidates, best_guess)
+                clue_part = self.split_candidates_by_clue(candidates, best_guess)
                 # score = score_distribution(clue_part)
                 logger.debug(f"perfect solution found at level {len(pick_hist) + 1}")
                 if len(pick_hist) < depth:
@@ -669,38 +749,8 @@ class WordleTree():
                     dt_picks[best_guess] = clue_part
 
         # # Number of bests to check.
-        # # Minimum parameters for best result are: 3,5,10,20
-
-        # if len(candidate_rank) > 300:
-        #     options = 3
-        # elif len(candidate_rank) >= 10:
-        #     options = 10
-        # else:
-        #     options = 20
-
-        # Sorted dict to look up the number of options configued branching factor
-        # opt_dict = SortedDict({300:5, 10:10, 0:20}) # default values
-        opt_dict = SortedDict({400:5, 50:50, 10:30, 0:40})
-        options = opt_dict.values()[opt_dict.bisect_right(len(candidate_rank)) - 1]
-
-        # Minimum parameters for best result are: 3,5,10,20
-        # so when there are more candidates, we actually branch less???
-        #     # options = 100
-        options = float('inf')
-        # if len(pick_hist) <= 4:
-        #     options = float('inf')
-        #     # options = 100
-        # # elif len(pick_hist) == 0:
-        # #     get_random_sample = True
-        # #     options = 5
-        # elif len(candidate_rank) > 400:
-        #     options = 10
-        # elif len(candidate_rank) >= 50:
-        #     options = 50
-        # elif len(candidate_rank) >= 10:
-        #     options = 30
-        # else:
-        #     options = 40
+        rule_index = self.branch_rules.bisect_right(len(candidate_rank)) - 1
+        options = self.branch_rules.values()[rule_index]
 
 
         logger.debug(f"total (non-candidate) picks: {len(pick_rank)} {options = }")
@@ -734,10 +784,7 @@ class WordleTree():
         
         logger.debug(f"{options = }, {len(candidate_rank) = }, {len(pick_rank) = }")
 
-        logger.debug(f"{len(allpicks) =}")
-
-        # if get_random_sample:
-        #     allpicks = random.sample(allpicks, options)
+        logger.debug(f"{len(allpicks) = }")
 
         # Filter any picks that are already DT recommendations
         allpicks = [p for p in allpicks if p[1] not in dt_picks]
@@ -866,7 +913,7 @@ def depth_profile_dt(dt, pick_prefix=(), clue_prefix=()):
     logger.debug(f"perfect solution found at level {len(pick_hist) + 1}")
     return [(best_guess, clue_part)] 
 
-def rotues_can_expand(rem_profile):
+def routes_can_expand(rem_profile):
     '''
     Returns True if the route set for the specified profile can still be
     expanded. False indicates that the partial route set is already worse
@@ -887,7 +934,33 @@ def tally_and_test(new_routes, working_profile):
             
         working_profile[len(route) - 1] -= 1
 
-    return rotues_can_expand(working_profile)
+    return routes_can_expand(working_profile)
+
+def within_l2_bounds(candidates, profile, pick_hist, clue_part):
+    """
+    Check if the lower bounds on the number routes two levels deeper for this pick
+    is greater than the number for the best route set o far. If the lower bounds is
+    greater, then there is no need to explore it, as it could not displace the
+    current reigning pick/route set even if every sub-pick has a perfect solution.
+    """
+    # A similar funciton could also be made to test lower bounds of average depth
+
+
+    return (len(pick_hist) != len(profile)- 2 or
+            len(candidates) - len(clue_part) < profile[-1])
+
+def within_l2_bounds_avg(candidates, pick_hist, max_depth, max_depth_count, clue_part):
+
+
+    return (depth != max_depth - 2) # or
+    # Q: at a particular layer in the dt search, will there be any routes found that
+    # are shorter than the current depth?
+    # A: almost surely no. new_pick_hist is appended, which is 1 longer that pick_hist
+    # also a solution is appended, which could be 2 longer 
+    # but best_profile passed in might be different.
+
+    #        (len(candidates) - len(clue_count) < max_depth_count))
+
 
 def result_length(results):
     ''' Len of this result (sum of the 2nd levels lengths)
@@ -901,10 +974,15 @@ def route_max_depth(results):
         return float('inf')
     return max(len(r) for r in results)
 
-def test_setup(picks_file='wordle_words.txt', solutions_file='wordle_solutions.txt'):
+def test_setup(picks_file='wordle_picks.txt',
+               solutions_file='wordle_candidates.txt', dt=None):
+
+    if isinstance(dt, str):
+        dt = read_decision_tree(dt)
+
     lexicon = load_word_list(picks_file) # 14855 words
     candidates = load_word_list(solutions_file) # 2315 words
-    tree = WordleTree(candidates, lexicon, None)
+    tree = WordleTree(candidates, lexicon, dt)
     return tree
 
 def run_test(tree, pick_hist=(), clue_hist=(), dt=None, dt_depth=1, parallel=True,
@@ -929,12 +1007,8 @@ def run_test(tree, pick_hist=(), clue_hist=(), dt=None, dt_depth=1, parallel=Tru
     else:
         logger.debug("Routes verified.")
 
-    # dt_out = routes_to_dt(routes)
-    # out_routes = dt_to_routes(dt_out)
-
     prof = depth_profile(routes)
-    prof_dict = {i:prof[i] for i in range(len(prof))}
-    # del prof_dict[0]
+    prof_dict = {i + 1:prof[i] for i in range(len(prof))} # offset by one
 
     logger.debug('='* 72 + '\n' +
                  dedent(f'''
@@ -951,22 +1025,24 @@ def run_test(tree, pick_hist=(), clue_hist=(), dt=None, dt_depth=1, parallel=Tru
 
 def exp_main():
 
-    # dt = read_decision_tree('dtree/output_dt_rance.5.txt')
     # dt = {'CARNE':{}}
-    dt = {'RANCE':{ Color.from_ordinal(Color.ordinal('10001')):{'FOIST':{}}}}
+    # dt = {'RANCE':{ Color.from_ordinal(Color.ordinal('10001')):{'FOIST':{}}}}
 
-    tree = test_setup('wordle_words.txt', 'wordle_solutions.txt')
 
     # lexicon = load_word_list('default_words.txt')
-    # lexicon = load_word_list('wordle_solutions.txt') # 2315 words
+    # lexicon = load_word_list('wordle_candidates.txt') # 2315 words
     # lexicon = load_word_list('wordle_sample.txt') # 232 words
     # candidates = load_word_list('wordle_sample.txt') # 232 words
 
     # lexicon = load_word_list('default_words.txt')
-    # lexicon = load_word_list('wordle_solutions.txt') # 2315 words
+    # lexicon = load_word_list('wordle_candidates.txt') # 2315 words
 
     # lexicon = load_word_list('wordle_sample.txt') # 232 words
     # candidates = load_word_list('wordle_sample.txt') # 232 words
+
+    tree = test_setup('wordle_picks.txt', 'wordle_candidates.txt',
+                      dt='dtree/output_dt_rance.5.txt')
+    tree.set_branch_rules({0:float('inf')})
 
 
     pick_hist = ('RANCE',)
@@ -994,35 +1070,29 @@ def exp_main():
                      '22101', '22200', '22202', '22220')
                 
 
-    # pick_hist = ('SALET', 'ROWND', 'PUBIC')
-    # clue_hist = ('00020', '10000', '22000')
-    # pick_hist = ('SALET', 'ROWND')
-    # clue_hist = ('00020', '10000')
-
     for clue in clue_sub_hist:
-        print("===========================================================")
-        run_test(tree, pick_hist, (clue,), dt=dt, dt_depth=1, parallel=True,
+        print("=" * 72)
+        run_test(tree, pick_hist, (clue,), dt_depth=1, parallel=False,
                  filename=f'output_dt_rance_{clue}.txt')
-        print("===========================================================")
+        print("=" * 72)
 
 
 def main():
 
-    dt = read_decision_tree('dtree/output_dt_rance.5.txt')
-    dt = {'CARNE':{}}
-    dt = {'SALET':{}}
-    # dt = {'LATTE':{}}
-    # dt = {'CARET':{}}
-    # HEART, CREST, DIRGE, SPITE, SINGE, RATEL, LATER, RAISE, ALTER, OLATE, URAEI, OURIE
-    # SPORE, RESIN, HAIRY, LEASH, OAKEN, ALTER
+    # dt = read_decision_tree('dtree/output_dt_rance.5.txt')
+    pick = 'BONES'
+    dt = {pick:{}}
 
     # dt = read_decision_tree('dtree/output_dt_rance.txt')
-    run_test(dt=dt, dt_depth=1,  parallel=True)
+    tree = test_setup('wordle_picks.txt', 'wordle_candidates.txt', dt)
+    # tree.set_branch_rules({0:float('inf')})
+    run_test(tree, dt=dt, dt_depth=1, parallel=True,
+                 filename=f'output_dt_{pick.lower()}.txt')
 
 
 if __name__ == '__main__':
 
-    cProfile.run('exp_main()', 'output.prof')
+    cProfile.run('main()', 'output.prof')
 
     p = pstats.Stats('output.prof')
     p.strip_dirs().sort_stats('cumulative').print_stats(35)  # Show top 10 functions

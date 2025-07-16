@@ -1,4 +1,6 @@
 import os
+from itertools import chain
+import numpy as np
 
 def all_files_newer(set1, set2):
     "Returns True if all files in set1 are accessible and modification times are later than those in set2"
@@ -39,10 +41,17 @@ def default(*args):
 
 class LazyList(list):
     """List that fills itself lazily from an iterator"""
-    def __init__(self, generator=None):
-        self._is_filled = generator is None
-        self._generator = generator
-        # Not calling super().__init__, list population delayed
+    # def __init__(self, generator=None):
+    #     self._is_filled = generator is None
+    #     self._generator = generator
+    #     # Not calling super().__init__, list population delayed
+    def __init__(self, *generators):
+        self._is_filled = len(generators) == 0
+
+        if len(generators) > 1:
+            self._generator = chain(*generators)
+        elif len(generators) == 1:
+            self._generator = generators[0]
 
     def _fill(self):
         if not list.__getattribute__(self, '_is_filled'):
@@ -72,6 +81,42 @@ class LazyList(list):
         # self._fill()
         super().__getattribute__('_fill')() # Populate the cache when an item is accessed
         return super().__getattribute__(name)
+
+def load_word_list(filename):
+        with open(filename) as f:
+            return tuple(line.split(maxsplit=1)[0] for line in f if line)
+
+
+
+class LazyMatrix:
+    def __init__(self, func):
+        self.func = func
+
+    def __getitem__(self, index):
+        return self.func(index)
+
+    def __repr__(self):
+        return f"LazyMatrix({self.func.__name__})"
+
+# Example usage:
+def lazy_func(index):
+    i, j = index
+    # Simulate an expensive computation
+    return np.sin(i) * np.cos(j)
+
+lazy_matrix = LazyMatrix(lazy_func)
+print(lazy_matrix[0, 0])  # Compute and print the value at (0, 0)
+
+
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
