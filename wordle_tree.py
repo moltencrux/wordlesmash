@@ -544,24 +544,18 @@ class WordleTree():
         if candidates is None:
             candidates = map(self.word_idx.get, self._all_candidates)
 
-        print(f"{pick_hist = }") 
-        print(f"{clue_hist = }") 
         candidates = list(candidates)
-        print(f'{candidates[:5] = }')
         if None in candidates:
             raise ValueError
 
         pipe = candidates
         for pick, clue in zip(pick_hist, clue_hist):
-            print(f'{pick = } {clue = }')
             pipe = filter((lambda secret, pick=pick, clue=clue: self.clue_matrix[pick, secret] == clue), pipe)
 
         return frozenset(pipe)
 
     def get_valid_candidate_words(self, pick_word_hist=(), clue_color_hist=(),
                                   candidates=None):
-        print(f'{pick_word_hist = }')
-        print(f'{clue_color_hist = }')
         pick_hist = tuple(map(self.word_idx.get, pick_word_hist))
         clue_hist = tuple(map(Color.ordinal, clue_color_hist))
         if candidates is not None:
