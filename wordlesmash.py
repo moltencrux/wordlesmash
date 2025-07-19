@@ -65,6 +65,20 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.guessDisplay.wordWithdrawn.connect(self.onWordWithdrawn)
         self.resetButton.clicked.connect(self.onResetGame)
 
+
+        #self.key_ENTER.setStyleSheet("background-color: red; color: white; :disabled {background-color: gray; color: black;} :enabled {background-color: green; color: white;}")
+        # self.key_ENTER.setStyleSheet(":disabled {background-color: gray; color: darkgray;} :enabled {background-color: green; color: white;}")
+
+        self.key_A.setStyleSheet("""
+            QPushButton {
+                background-color: #ffa500;
+                border: 5px solid #15cb1b;
+                border-style: solid;
+                border-radius: 5px
+            }
+        """)
+
+
     # @pyqtSlot why is this broken?
     def updateSuggestionLists(self):
         """This should be called when the suggestions are ready"""
@@ -93,17 +107,14 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
 
 
     # @pyqtSlot wtf?
-    def onWordSubmitted(self, word_hist=None, colors_hist=None):
+    def onWordSubmitted(self, word=None, colors_hex=None):
         """Slot to handle wordSubmitted signal."""
 
         self.guessDisplay.setSubmitDisabled(True)
         self.waitingSpinner.start()
         self.key_ENTER.setDisabled(True)
 
-        if word_hist is not None and colors_hist is not None:
-
-            word = word_hist[-1]
-            colors_hex = colors_hist[-1]
+        if word is not None and colors_hex is not None:
 
             color_map = {'#000000': Color.BLACK, '#6aaa64': Color.GREEN, "#c9b458": Color.YELLOW}
 

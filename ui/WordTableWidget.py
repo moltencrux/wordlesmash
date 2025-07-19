@@ -82,7 +82,7 @@ class CellFrame(QFrame):
 
 class WordTableWidget(QTableWidget):
     # Custom signal for when a new row is added (word and colors submitted)
-    wordSubmitted = pyqtSignal(list, list)
+    wordSubmitted = pyqtSignal(str, list)
     wordWithdrawn = pyqtSignal()  # Renamed and simplified signal for row deletion
 
     def __init__(self, rows=1, cols=5, parent=None):
@@ -372,9 +372,8 @@ class WordTableWidget(QTableWidget):
                     # Add new row
                     new_row = self.rowCount()
                     self.insertRow(new_row)
-                    word_hist, clue_hist = self.getHistory()
                     # Emit signal with word and colors
-                    self.wordSubmitted.emit(word_hist, clue_hist)
+                    self.wordSubmitted.emit(word, colors)
                     print(f"Emitted wordSubmitted: word='{word}', colors={colors}")
                     # Set up new row
                     viewport_width = self.viewport().width()
