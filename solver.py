@@ -145,8 +145,8 @@ class GuessFilter:
     def __init__(self, length=5, lexicon=None, candidates=None):
 
         self.length = length # length of the word
-        self._lexicon = lexicon # the dictionary of words being considered as possibilities
-        self.candidates = candidates if candidates is not None else lexicon # remaining words that are still valid based on filters
+        self._lexicon = lexicon if lexicon is not None else () # the dictionary of words being considered as possibilities
+        self.candidates = candidates if candidates is not None else self._lexicon # remaining words that are still valid based on filters
         self.viable = {None: [True] * length} # keys: known letters w/ list of Booleans that denotes a letter's possible presence at a position
         self.confirmed = {None: CustomList([False] * length)} # keys: known letters w/ list of Booleans that denotes greens (seen or implied) at a position
         self.blacklist = set()
@@ -253,18 +253,36 @@ class GuessFilter:
     #     # careful/bc a single letter could be in multiple CCs
 
     def get_qty_max(self, c):
+        """
+        This is a definite upper bounds for instances of a character, but might
+        conceviably not be the _least_ upper bounds in some cases.
+        """
     
         if c in self.blacklist:
             return self.letters.get(c, 0)
         elif c in self.letters: 
-            # Viable columns that intersect with Nones could be further duplicates
-            # And any further occurances are limited to that overlap.
             overlap = sum(np.bool(self.viable[c]) & np.bool(self.viable[None]))
-            # overlap = sum(k and u for k, u in zip(self.viable[c], self.viable[None]))
-            return self.letters[c] + min(overlap, self.get_unknown_count())
+            upper = [
+                # sum(self.viable[c]) + sum(self.confirmed[c]),  # this is one upper bounds
+                self.letters[c] + self.get_unknown_count(),    # This is another UB
+                self.letters[c] + overlap, # ?
+            ]
+
+            # I think the true _least_ upper bounds for a character might be
+            # sum(confirmed[c]) + the overlap of Nones within the character's CC
+            # - other char instances confirmed in the CC?
+
+            return min(upper)
+
         else:
             return self.get_unknown_count()
 
+        # XXX possibly flawed..imagine long word.. imagine we have 1 gn, + 2 yellow 
+        # # I _think_ it should be the overlap + confirmed/green
+        # Imaigine we got Y____ for some guess on A : black for rest non-A
+        # then A could be in any of the later slots. : qty at most 4
+        # But.. the overlap would be 4, and also min qty 4, and unkown_ct would be 4
+        #
 
         # M = self.get_matrix()
         # find_closed_components
@@ -703,6 +721,120 @@ class GuessFilter:
         return ''.join(key)
 
 
+    def get_allowed_colors_by_slot(self, pick):
+        """
+        Returns a list of sets, where slot_colors[i] contains the allowed colors
+        for slot i in the guess `pick` using a bipartite matching approach.
+        
+        Args:
+            pick (str or list): The current guess, e.g., "AAXXX".
+        
+        Returns:
+            list[set[Color]]: List of sets of allowed colors for each slot.
+        """
+        # Convert pick to list
+        if isinstance(pick, str):
+            pick = list(pick)
+
+        letters = self.letters.copy() 
+
+        pick_counts = Counter(pick)
+        extra_counts = pick_counts.copy()
+        extra_counts.subtract(self.letters)
+
+        extra_rows = sum(([c] * -n for c, n in extra_counts.items() if n < 0), [])
+        extra_rows.sort(key=self.char_ord.get)
+        extra_cols = sum(([c] * n for c, n in extra_counts.items() if n > 0), [])
+        extra_cols.sort(key=lambda c: self.char_ord.get(c, float('inf')))
+        extra = len(extra_rows)
+
+
+        pick_rows = {}
+        for r, c in enumerate(pick + extra_rows): # do we include extra here?
+            pick_rows.setdefault(c, []).append(r)
+
+        # np.fromiter((pick_counts[c] - self.get_qty_max(c) for c in pick_counts), dtype=int)
+
+        # Initialize 5+nx5+n matrix
+        M = np.ones((self.length + extra, self.length + extra), dtype=int)
+        # M[self.length:,self.length:] = 0 # set extra rows to not be black
+        # M[:self.length,:self.length] = self.viable[None] # Extra rows can only be linked with Unknown characters
+        
+        # Apply constraints
+        for i, c in enumerate(pick + extra_rows):
+            if c == ' ' or c == '':
+                continue
+                # spaces / empty strings should match anything I think. But also should
+                # be able to be black. But do they get extra rows? maybe not match themselves?
+                # only themselvels?
+                # I think we'll match all for now
+
+            # Confirmed green: only diagonal is 1
+            if c in self.confirmed and i < self.length and self.confirmed[c][i]:
+                M[i, :] = 0
+                M[:, i] = 0
+                M[i, i] = 1
+            else:
+                # Rule out slots where c is not allowed
+                for j in range(self.length):
+                    if not self.char_allowed_slot(c, j):
+                        M[i, j] = 0
+                for j in range(len(extra_cols)):
+                    if c is None and i >= self.length:
+                        #M[i, i] = 1  # mark diagonal for nones // mistaken
+                        M[i, j] = int(extra_cols[j] not in self.blacklist)
+                        # I think this should be 1 for anyting not in blacklist
+                        # am i missing sth?
+                    elif c != extra_cols[j]:
+                        M[i, j + self.length] = 0
+
+
+        # c is the letter, n is the multiplicity, must be > 1
+        # sweeping left (or up) to reduce yellows (which matches them to the right)
+        for c, n in [(c, n) for c, n in pick_counts.items() if n > 1]:
+            # inner group just finds the place for multiple chars
+            # probably a better wya to do this
+
+            # for i in reversed(i for i, pc in enumerate(pick) if pc == c): # rows that are c
+            #     ...
+            for i in reversed(pick_rows[c]): # rows that are c
+                qty_max = self.get_qty_max(c)
+                if not self.char_allowed_slot(c, i) and n > qty_max:
+                    # force black
+                    M[i, self.length:] = 0
+                elif c in self.confirmed and self.confirmed[c][i]:
+                    qty_max -= 1
+                elif self.char_allowed_slot(c, i) and n > qty_max:
+                    M[i, self.length:] = 0 # remove yellows?
+                    M[i, i] = 1
+                n -= 1
+
+        # Compute OR matrix
+        R = compute_or_matrix(M)
+        
+        # Translate to colors
+        slot_colors = [set() for _ in range(self.length)]
+        for i, c in enumerate(pick):
+            # if c == ' ':
+            #     continue
+            # Green if connected to any solution slot
+            if R[i, i]:
+                slot_colors[i].add(Color.GREEN)
+            # Black if connected to any black column
+            if any(R[i, j] for j in range(self.length, self.length + extra)):
+                slot_colors[i].add(Color.BLACK)
+            # Yellow is possible if any non-diagonal slot is 1
+            if any(R[i, j] for j in (*range(0, i), *range(i + 1, self.length))):
+                slot_colors[i].add(Color.YELLOW)
+
+        print(f"M = {M}")
+        print(f"R = {R}")
+
+        return slot_colors
+
+
+
+
 class AbstractGuessManager(metaclass=ABCMeta):
 
     @abstractmethod
@@ -741,22 +873,30 @@ class DecisionTreeGuessManager(AbstractGuessManager):
 
         self.tree = None
 
-        self.reset()
+        self.reset() # sets self.filter
 
     def reset(self):
         # self.state = []
         self.pick_word_hist = []
         self.clue_color_hist = []
+        self.filter = GuessFilter()
 
     def update_guess_result(self, word=None, colors=None):
         if word and colors:
+            colors = tuple(colors)
             # self.state.append((word, colors))
             self.pick_word_hist.append(word)
             self.clue_color_hist.append(colors)
+            self.filter.update_guess_result(word, colors)
 
     def undo_last_guess(self):
         self.pick_word_hist.pop()
         self.clue_color_hist.pop()
+        new_filter = GuessFilter()
+        for word, colors in zip(self.pick_word_hist, self.clue_color_hist):
+            new_filter.update_guess_result(word, colors)
+
+        self.filter = new_filter
 
     def get_suggestions(self):
 
@@ -772,7 +912,7 @@ class DecisionTreeGuessManager(AbstractGuessManager):
             for word, clue in zip(self.pick_word_hist, self.clue_color_hist):
                 branch = branch.get(word, {}).get(clue, {})
 
-            return [*branch.keys()]
+            return [] if branch is None else [*branch.keys()]
 
         suggestions = dt_lookup()
 
@@ -793,6 +933,8 @@ class DecisionTreeGuessManager(AbstractGuessManager):
 
         self.dt = routes_to_dt(routes)
 
+    def get_allowed_colors_by_slot(self, pick):
+        return self.filter.get_allowed_colors_by_slot(pick)
 
 
 class GuessManager(AbstractGuessManager):
@@ -804,7 +946,7 @@ class GuessManager(AbstractGuessManager):
         self.reset()
 
     def reset(self):
-        self.filter  = GuessFilter(length=self.length, lexicon=self.lexicon)
+        self.filter = GuessFilter(length=self.length, lexicon=self.lexicon)
         self.history = []
         self.redo = []
         self.update_frequencies()

@@ -388,8 +388,12 @@ class WordleTree():
 
         ''' Recursive version of a modified beam search
         '''
-        # XXX I'm thiking we should check best_profile here if it's nto checked b4 call
-        # and... the last nonzero should be +
+        # Check to be sure if we're at the goal already
+        if next(iter(clue_hist[-1:]), None) == Color.all_green():
+            return []
+
+        # XXX I'm thiking we should check best_profile here if it's not checked
+        # b4 call and... the last nonzero should be +
 
         if best_profile: 
             max_depth = len(best_profile)
