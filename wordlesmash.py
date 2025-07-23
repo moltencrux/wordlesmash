@@ -77,6 +77,8 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
                 border-radius: 5px
             }
         """)
+        
+        self.guessDisplay.set_color_callback(self.guess.get_allowed_colors_by_slot)
 
 
     # @pyqtSlot why is this broken?
@@ -104,24 +106,25 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
 
         self.guessDisplay.setSubmitEnabled(True)
         self.key_ENTER.setEnabled(True)
+        # self.guess.filter.get_colors_allowed_by_slot('FUDGY')
 
 
     # @pyqtSlot wtf?
-    def onWordSubmitted(self, word=None, colors_hex=None):
+    def onWordSubmitted(self, word=None, colors=None):
         """Slot to handle wordSubmitted signal."""
 
         self.guessDisplay.setSubmitDisabled(True)
         self.waitingSpinner.start()
         self.key_ENTER.setDisabled(True)
 
-        if word is not None and colors_hex is not None:
+        # if word is not None and colors is not None:
 
-            color_map = {'#000000': Color.BLACK, '#6aaa64': Color.GREEN, "#c9b458": Color.YELLOW}
+        #     color_map = {'#000000': Color.BLACK, '#6aaa64': Color.GREEN, "#c9b458": Color.YELLOW}
 
-            colors = tuple(color_map.get(c, Color.UNKNOWN) for c in colors_hex)
-        else:
-            word = None
-            colors = None
+        #     colors = tuple(color_map.get(c, Color.UNKNOWN) for c in colors_hex)
+        # else:
+        #     word = None
+        #     colors = None
 
         print(f"Received wordSubmitted: '{word} {colors}'")
 
