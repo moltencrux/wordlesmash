@@ -207,14 +207,14 @@ def dt_to_routes(root):
 
     while stack:
         base, branch = stack.pop()
-        leg, clues = next(iter(branch.items()))
-        path = base + (leg,)
+        for leg, clues in branch.items():
+            path = base + (leg,)
 
-        for clue, next_branch in clues.items():
-            if all(v == Color.GREEN for v in clue) and next_branch is None:
-                routes.append(path)
-            else:
-                stack.append((path, next_branch))
+            for clue, next_branch in clues.items():
+                if all(v == Color.GREEN for v in clue) and next_branch is None:
+                    routes.append(path)
+                else:
+                    stack.append((path, next_branch))
 
     return routes
 

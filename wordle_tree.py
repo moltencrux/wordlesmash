@@ -28,7 +28,7 @@ from textwrap import dedent
 from joblib import Parallel, delayed, parallel_backend
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from multiprocessing import Event, get_context, Manager
+from multiprocessing import Event, get_context, Manager, Process
 from sortedcontainers import SortedDict
 from math import inf
 import threading
@@ -296,7 +296,6 @@ class WordleTree():
 
         self.dt = dt
 
-
     @staticmethod
     def precompute_clues(picks, solutions):
         clue_matrix = np.empty((len(picks), len(solutions)), dtype=np.uint8)
@@ -309,6 +308,12 @@ class WordleTree():
 
 
     def set_branch_rules(self, branch_rules):
+        '''
+        Set the rules for the way branching occurs in the beam search. 
+        branch_rules is a dictionary, keyed by the lower limit of candidates
+        with the value of the number of picks (branch factor) that will be
+        searched.  The upper limit will be next largest key (non inclusive).
+        '''
         self.branch_rules = SortedDict(branch_rules)
 
     def gen_matrix_filename(self, template='.cache/wordle_matrix_{}.npy'):
@@ -342,15 +347,15 @@ class WordleTree():
 
 
     def mod_dfs_beam_search(self, candidates=None, picks=None, pick_hist=(),
-                            clue_hist=(), dt=None, dt_depth=1, parallel=False):
+                            clue_hist=(), dt=None, dt_depth=1, parallel=False,
+                            abort=None):
         ''' Top level wrapper for searching the Wordle pick/solution space
         '''
         candidates, picks = self._fix_candidates_and_picks(candidates, picks)
 
-        if pick_hist and clue_hist:
-            # Convert to numeric representation
-            pick_hist = tuple(self.word_idx[word] for word in pick_hist)
-            clue_hist = tuple(Color.ordinal(clue_str) for clue_str in clue_hist)
+        # Convert to numeric representation
+        pick_hist = tuple(self.word_idx[word] for word in pick_hist)
+        clue_hist = tuple(Color.ordinal(clue_str) for clue_str in clue_hist)
 
         # Create a chain of filters to filter candidates that match only the
         # previous picks and clues.
@@ -373,10 +378,13 @@ class WordleTree():
 
         all_routes = self.mod_dfs_beam_rec(candidates, picks, pick_hist,
                                             clue_hist, dt, dt_depth,
-                                            parallel=parallel)
+                                            parallel=parallel, abort=abort)
+
+        if abort is not None:
+            abort.set() # signal monitor thread to terminate
 
         if all_routes is None:
-            return None
+            return ()
         else:
             return tuple(sorted(tuple(self.idx_word[pick] for pick in route)
                                 for route in all_routes))
@@ -438,7 +446,7 @@ class WordleTree():
         for pick, clue_part in self.get_top_picks(pick_rank, candidate_rank,
                                                   pick_hist, clue_hist, dt,
                                                   dt_depth, final_branch):
-            if abort is not None and abort.is_set():
+            if abort and abort.is_set():
                 return None # Received signal from above to abort
 
             routes = []
@@ -486,7 +494,7 @@ class WordleTree():
                 for result in self._beam_batch_helper(batch_args, working_profile,
                                                     parallel, abort):
                 
-                    if abort is not None and abort.is_set():
+                    if abort and abort.is_set():
                         return None # Received signal from above to abort
                     elif result is not None:
                         routes.extend(result)
@@ -514,6 +522,15 @@ class WordleTree():
             with Manager() as manager:
                 stop_workers = manager.Event()
 
+                monitor_started = False
+                processing_finished = False
+
+                def monitor_stop_condition():
+                    abort.wait()
+                    stop_workers.set()
+
+                Process(target=monitor_stop_condition).start()
+
                 with ProcessPoolExecutor(max_workers=5) as executor:
                     futures = []
 
@@ -524,7 +541,7 @@ class WordleTree():
                     
                     for future in as_completed(futures):
                         result = future.result()
-                        if result is not None and tally_and_test(result, working_profile):
+                        if (not (abort and abort.is_set())) and result is not None and tally_and_test(result, working_profile):
                             yield result
                         else:
                             stop_workers.set()
@@ -536,7 +553,7 @@ class WordleTree():
 
                 result = self.mod_dfs_beam_rec(*args, working_profile, parallel, abort)
 
-                if result is not None and tally_and_test(result, working_profile):
+                if (not (abort and abort.is_set())) and result is not None and tally_and_test(result, working_profile):
                     yield result
                 else:
                     yield None
@@ -722,7 +739,7 @@ class WordleTree():
         # suggestion first
 
         dt_picks = {}
-        if dt:
+        if dt and candidate_rank:
             _, secret, _ = next(iter(candidate_rank), None)
             branch = dt
             best_guess = self.word_idx[next(iter(branch))]

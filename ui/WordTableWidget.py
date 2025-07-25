@@ -130,12 +130,13 @@ class CellFrame(QFrame):
 
 class WordTableWidget(QTableWidget):
     # Custom signal for when a new row is added (word and colors submitted)
-    wordSubmitted = pyqtSignal(str, list)
+    wordSubmitted = pyqtSignal(str, tuple)
     wordWithdrawn = pyqtSignal()
 
     def __init__(self, rows=1, cols=5, color_callback=None, parent=None):
         super().__init__(rows, cols, parent)
         self._submitEnabled = True
+        self._withdrawEnabled = True
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
@@ -325,21 +326,55 @@ class WordTableWidget(QTableWidget):
             if frame:
                 if col < len(string) and string[col].isalpha():
                     frame.setText(string[col].upper())
-                    allowed = self.allowed_colors[col]
-                    color = allowed[0] if allowed and allowed[0] != Color.UNKNOWN else Color.BLACK
-                    frame.set_color(color)
+                    # allowed = self.allowed_colors[col]
+                    # color = allowed[0] if allowed and allowed[0] != Color.UNKNOWN else Color.BLACK
+                    # frame.set_color(color)
                 else:
                     frame.setText("")
-                    frame.set_color(Color.UNKNOWN)
+                frame.set_color(Color.UNKNOWN)
                 frame.setFont(QFont("Arial", font_size, QFont.Weight.Bold))
-                frame.updateStyle(last_row == self.currentRow() and col == self.currentColumn())
+                # frame.updateStyle(last_row == self.currentRow() and col == self.currentColumn())
+
+        self.update_allowed_colors()
+
+        for col in range(self.columnCount()):
+            frame = self.cellWidget(last_row, col)
+            frame.set_color(self.allowed_colors[col][0])
+            # wtf is this?
+            frame.updateStyle(last_row == self.currentRow() and col == self.currentColumn())
+
+        # XXX update allowed colors
+        # allowed = self.allowed_colors[col]
 
         focus_col = min(len([c for c in string[:self.columnCount()] if c.isalpha()]), self.columnCount() - 1)
         self.setCurrentCell(last_row, focus_col)
         self.prev_focused_cell = (last_row, focus_col)
-        self.update_allowed_colors()
         print(f"Set last row text: '{string}', focus: row={last_row}, col={focus_col}")
         self.viewport().update()
+
+    def removeLastRow(self):
+        current_row = self.currentRow()
+        current_col = self.currentColumn()
+        frame = self.cellWidget(current_row, current_col)
+
+        # row_empty = all(
+        #     self.cellWidget(current_row, c) and not self.cellWidget(current_row, c).text()
+        #     for c in range(self.columnCount())
+        # )
+
+        if  self.rowCount() > 1:
+            print(f"Deleting empty row {current_row}")
+            self.removeRow(current_row)
+            self.wordWithdrawn.emit()
+            print(f"Emitted wordWithdrawn")
+            new_row = self.rowCount() - 1
+            new_col = self.columnCount() - 1
+            self.setCurrentCell(new_row, new_col)
+            self.prev_focused_cell = (new_row, new_col)
+            self.update_allowed_colors()
+            print(f"Backspace delete: row={new_row}, col={new_col}, prev_focused={self.prev_focused_cell}")
+        return
+
 
     def initializeCells(self):
         """Set up empty cells with QFrame and transparent background."""
@@ -461,7 +496,7 @@ class WordTableWidget(QTableWidget):
                 )
                 if row_filled:
                     word = ''.join(self.cellWidget(current_row, c).text() for c in range(self.columnCount()))
-                    enum_colors = [self.cellWidget(current_row, c).color for c in range(self.columnCount())]
+                    enum_colors = tuple(self.cellWidget(current_row, c).color for c in range(self.columnCount()))
                     self.wordSubmitted.emit(word, enum_colors)
                     print(f"Emitted wordSubmitted: word='{word}', colors={[c.name for c in enum_colors]}")
                     new_row = self.rowCount()
@@ -493,17 +528,9 @@ class WordTableWidget(QTableWidget):
                 self.cellWidget(current_row, c) and not self.cellWidget(current_row, c).text()
                 for c in range(self.columnCount())
             )
-            if current_col == 0 and row_empty and self.rowCount() > 1 and self._submitEnabled:
-                print(f"Deleting empty row {current_row}")
-                self.removeRow(current_row)
-                self.wordWithdrawn.emit()
-                print(f"Emitted wordWithdrawn")
-                new_row = self.rowCount() - 1
-                new_col = self.columnCount() - 1
-                self.setCurrentCell(new_row, new_col)
-                self.prev_focused_cell = (new_row, new_col)
-                self.update_allowed_colors()
-                print(f"Backspace delete: row={new_row}, col={new_col}, prev_focused={self.prev_focused_cell}")
+            if current_col == 0 and row_empty and self.rowCount() > 1 and self._withdrawEnabled:
+                self.removeLastRow()
+
             else:
                 if frame:
                     frame.setText("")
@@ -528,6 +555,12 @@ class WordTableWidget(QTableWidget):
 
     def setSubmitDisabled(self, state=True):
         self.setSubmitEnabled(not state)
+
+    def setWithdrawEnabled(self, state=True):
+        self._withdrawEnabled = bool(state)
+
+    def setWithdrawDisabled(self, state=True):
+        self.setWithdrawEnabled(not state)
 
     def getHistory(self):
         """Return words and colors from previous rows."""

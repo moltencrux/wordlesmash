@@ -5,6 +5,7 @@ from PyQt6.QtCore import (QCoreApplication, QSettings, Qt, pyqtSlot, pyqtSignal,
 
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtGui import QColorConstants
+from threading import Event
 from importlib.resources import files
 from pathlib import Path
 from utils import all_files_newer
@@ -64,6 +65,8 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.guessDisplay.wordSubmitted.connect(self.onWordSubmitted)
         self.guessDisplay.wordWithdrawn.connect(self.onWordWithdrawn)
         self.resetButton.clicked.connect(self.onResetGame)
+        self.stopButton.setDisabled(True)
+        self.stopButton.clicked.connect(self.onCancelSearch)
 
 
         #self.key_ENTER.setStyleSheet("background-color: red; color: white; :disabled {background-color: gray; color: black;} :enabled {background-color: green; color: white;}")
@@ -81,64 +84,65 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.guessDisplay.set_color_callback(self.guess.get_allowed_colors_by_slot)
 
 
-    # @pyqtSlot why is this broken?
+    @pyqtSlot()
     def updateSuggestionLists(self):
         """This should be called when the suggestions are ready"""
 
         self.waitingSpinner.stop()
         self.statusBar.showMessage('Suggestions ready!')
+        self.stopButton.setDisabled(True)
+        self.resetButton.setEnabled(True)
         sender = self.sender()
 
         if isinstance(sender, SuggestionGetter):
             picks = sender.picks
             candidates = sender.candidates
         else:
+            candidates = ()
             logging.debug(type(sender))
 
-        self.strategicListWidget.clear()
-        for s in picks:
-            self.strategicListWidget.addItem(s)
+        if candidates:
+
+            self.strategicListWidget.clear()
+            for s in picks:
+                self.strategicListWidget.addItem(s)
+
+            self.solutionListWidget.clear()
+            for c in candidates:
+                self.solutionListWidget.addItem(c)
+
+        if self.solutionListWidget.count() > 1:
+            self.guessDisplay.setSubmitEnabled(True)
+            self.key_ENTER.setEnabled(True)
+
+        self.guessDisplay.setWithdrawEnabled(True)
 
 
-        self.solutionListWidget.clear()
-        for c in candidates:
-            self.solutionListWidget.addItem(c)
-
-        self.guessDisplay.setSubmitEnabled(True)
-        self.key_ENTER.setEnabled(True)
-        # self.guess.filter.get_colors_allowed_by_slot('FUDGY')
-
-
-    # @pyqtSlot wtf?
+    @pyqtSlot(str, tuple)
     def onWordSubmitted(self, word=None, colors=None):
         """Slot to handle wordSubmitted signal."""
 
-        self.guessDisplay.setSubmitDisabled(True)
-        self.waitingSpinner.start()
-        self.key_ENTER.setDisabled(True)
+        self.guess.update_guess_result(word, colors)
 
-        # if word is not None and colors is not None:
-
-        #     color_map = {'#000000': Color.BLACK, '#6aaa64': Color.GREEN, "#c9b458": Color.YELLOW}
-
-        #     colors = tuple(color_map.get(c, Color.UNKNOWN) for c in colors_hex)
-        # else:
-        #     word = None
-        #     colors = None
 
         print(f"Received wordSubmitted: '{word} {colors}'")
 
-        self.guess.update_guess_result(word, colors)
         self.spawnSuggestionGetter()
 
 
     def spawnSuggestionGetter(self):
 
         # Create a thread that will launch a search
+        self.guessDisplay.setSubmitDisabled(True)
+        self.guessDisplay.setWithdrawDisabled(True)
+        self.stopButton.setEnabled(True)
+        self.resetButton.setDisabled(True)
+        self.statusBar.showMessage('Generating picks...')
+        self.waitingSpinner.start()
+        self.key_ENTER.setDisabled(True)
         getter = SuggestionGetter(self)
         getter.finished.connect(self.updateSuggestionLists)
         getter.start()
-        self.statusBar.showMessage('Rebuilding decision tree...')
 
 
     def setSpinnerProperties(self):
@@ -154,7 +158,10 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.waitingSpinner.setColor(QColorConstants.Gray)
 
 
-
+    @pyqtSlot()
+    def onCancelSearch(self):
+        self.guess.stop()
+        self.guessDisplay.removeLastRow()
 
     @pyqtSlot()
     def onWordWithdrawn(self):
@@ -194,10 +201,18 @@ class SuggestionGetter(QThread):
         super().__init__(parent)
         self.picks = []
         self.candidates = []
+        self._stop_event = Event()
 
     def run(self):
-        self.picks, self.candidates = self.parent().guess.get_suggestions()
+        picks, candidates = self.parent().guess.get_suggestions()
+        # if (picks, candidates) != (None, None):
+        self.picks, self.candidates = picks, candidates
+        # else:
+        #     ... # None indicates search was aborted maybe, or an error
         self.ready.emit()
+
+    def stop(self):
+        self._stop_event.set()
 
 
 if __name__ == '__main__':
