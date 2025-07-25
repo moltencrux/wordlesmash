@@ -8,13 +8,14 @@ from wordle_game import Color
 from wordle_tree import WordleTree
 from itertools import chain, islice
 from abc import ABCMeta, abstractmethod, abstractclassmethod
-from tree_utils import read_decision_tree, routes_to_dt
+from tree_utils import read_decision_tree, routes_to_dt, dt_to_routes
 import numpy as np
 from utils import diff_indexes, load_word_list
 from or_matrix import compute_or_matrix, is_or_matrix, find_closed_components
 from filter_code import FilterCode
 from scipy.sparse import lil_matrix
 from copy import deepcopy
+import threading
 
 # XXX question.. can we find a set of 4/5/6 words with maximum letter coverage?
 # how might we do that?
@@ -872,8 +873,21 @@ class DecisionTreeGuessManager(AbstractGuessManager):
             self.dt = dt if dt is not None else {}
 
         self.tree = None
+        # self._cond = threading.Condition()
+        self._stop = False
+        self._stop_event = threading.Event()
+        self._stop_lock = threading.Lock()
+        self._search_in_progress = False
 
         self.reset() # sets self.filter
+
+    def stop(self):
+        with self._stop_lock:
+            if self._search_in_progress:
+                self._stop_event.set()
+                self._search_in_progress = False
+            else:
+                ... # no search active. What do we do about this? No effect?
 
     def reset(self):
         # self.state = []
@@ -884,14 +898,17 @@ class DecisionTreeGuessManager(AbstractGuessManager):
     def update_guess_result(self, word=None, colors=None):
         if word and colors:
             colors = tuple(colors)
-            # self.state.append((word, colors))
             self.pick_word_hist.append(word)
             self.clue_color_hist.append(colors)
             self.filter.update_guess_result(word, colors)
 
     def undo_last_guess(self):
-        self.pick_word_hist.pop()
-        self.clue_color_hist.pop()
+        if self.pick_word_hist and self.clue_color_hist:
+            self.pick_word_hist.pop()
+            self.clue_color_hist.pop()
+        else:
+            ...
+
         new_filter = GuessFilter()
         for word, colors in zip(self.pick_word_hist, self.clue_color_hist):
             new_filter.update_guess_result(word, colors)
@@ -899,6 +916,12 @@ class DecisionTreeGuessManager(AbstractGuessManager):
         self.filter = new_filter
 
     def get_suggestions(self):
+
+        with self._stop_lock:
+            if self._search_in_progress:
+                return None, None # is this right? or maybe error condition?
+            else:
+                self._search_in_progress = True
 
         # pick_word_hist, clue_color_hist = tuple(zip(*self.state)) or ((), ())
 
@@ -923,15 +946,21 @@ class DecisionTreeGuessManager(AbstractGuessManager):
         rem_candidates = self.tree.get_valid_candidate_words(self.pick_word_hist,
                                                              self.clue_color_hist)
         
+        with self._stop_lock:
+            self._search_in_progress = False
+            self._stop_event = threading.Event()
+
         return suggestions, rem_candidates
 
     def regenerate_tree(self):
 
         routes = self.tree.mod_dfs_beam_search(pick_hist=self.pick_word_hist,
                                                clue_hist=self.clue_color_hist,
-                                               parallel=True)
-
-        self.dt = routes_to_dt(routes)
+                                               parallel=True,
+                                               abort=self._stop_event)
+                                               
+        new_dt = routes_to_dt(dt_to_routes(self.dt) + list(routes))
+        self.dt = new_dt
 
     def get_allowed_colors_by_slot(self, pick):
         return self.filter.get_allowed_colors_by_slot(pick)
