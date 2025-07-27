@@ -15,7 +15,8 @@ from or_matrix import compute_or_matrix, is_or_matrix, find_closed_components
 from filter_code import FilterCode
 from scipy.sparse import lil_matrix
 from copy import deepcopy
-import threading
+# import threading
+import multiprocessing
 
 # XXX question.. can we find a set of 4/5/6 words with maximum letter coverage?
 # how might we do that?
@@ -875,8 +876,8 @@ class DecisionTreeGuessManager(AbstractGuessManager):
         self.tree = None
         # self._cond = threading.Condition()
         self._stop = False
-        self._stop_event = threading.Event()
-        self._stop_lock = threading.Lock()
+        self._stop_event = multiprocessing.Event()
+        self._stop_lock = multiprocessing.Lock()
         self._search_in_progress = False
 
         self.reset() # sets self.filter
@@ -948,7 +949,7 @@ class DecisionTreeGuessManager(AbstractGuessManager):
         
         with self._stop_lock:
             self._search_in_progress = False
-            self._stop_event = threading.Event()
+            self._stop_event = multiprocessing.Event()
 
         return suggestions, rem_candidates
 

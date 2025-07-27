@@ -34,6 +34,21 @@ from math import inf
 import threading
 
 
+class CompoundEvent:
+    def __init__(self, *events):
+        self.events = events
+
+    def is_set(self):
+        return any(event.is_set() for event in self.events)
+
+    def set(self):
+        for event in self.events:
+            event.set()
+
+    def clear(self):
+        for event in self.events:
+            event.clear()
+
 def setup_logger(prefix=None):
     pid = os.getpid()
     log_file = f"log_{pid}.log"
@@ -519,17 +534,13 @@ class WordleTree():
     def _beam_batch_helper(self, batch_args, working_profile, parallel, abort):
 
         if parallel:
+
             with Manager() as manager:
                 stop_workers = manager.Event()
+                all_abort = CompoundEvent(stop_workers)
 
                 monitor_started = False
                 processing_finished = False
-
-                def monitor_stop_condition():
-                    abort.wait()
-                    stop_workers.set()
-
-                Process(target=monitor_stop_condition).start()
 
                 with ProcessPoolExecutor(max_workers=5) as executor:
                     futures = []
@@ -537,7 +548,7 @@ class WordleTree():
                     for args in batch_args:
                         futures.append(executor.submit(self.mod_dfs_beam_rec,
                                                        *args, working_profile,
-                                                       abort=stop_workers))
+                                                       abort=all_abort))
                     
                     for future in as_completed(futures):
                         result = future.result()
@@ -546,7 +557,8 @@ class WordleTree():
                         else:
                             stop_workers.set()
                             yield None
-                            break
+                            # break
+                # executor.shutdown(wait=True)
 
         else:
             for args in batch_args:

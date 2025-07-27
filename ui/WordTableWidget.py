@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget,
                              QListWidgetItem, QHBoxLayout, QWidget, QPushButton,
                              QGridLayout,)
 
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QTimer
 from PyQt6.QtGui import QBrush, QColor, QFont, QPalette, QKeyEvent
 from string import ascii_uppercase
 import sys
@@ -32,6 +32,7 @@ class CellFrame(QFrame):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._color = bg_color if isinstance(bg_color, Color) else Color.UNKNOWN
+        self._flash_color = None
         # Layout and label
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -69,8 +70,7 @@ class CellFrame(QFrame):
 
     @property
     def bg_color(self):
-        """Get background color as hex string."""
-        return self._enum_to_hex(self._color)
+        return self._flash_color if self._flash_color else self._enum_to_hex(self._color)
 
     @property
     def color(self):
@@ -87,6 +87,17 @@ class CellFrame(QFrame):
             self._color = color
         else:
             self._color = self._hex_to_enum(color)
+        self._flash_color = None
+        self.updateStyle(self.styleSheet().find("white") != -1)
+        self.updateTextColor()
+
+    def set_flash_color(self, hex_color):
+        self._flash_color = hex_color
+        self.updateStyle(self.styleSheet().find("white") != -1)
+        self.updateTextColor()
+
+    def clear_flash_color(self):
+        self._flash_color = None
         self.updateStyle(self.styleSheet().find("white") != -1)
         self.updateTextColor()
 
@@ -94,7 +105,8 @@ class CellFrame(QFrame):
         """Update border based on selection."""
         border_width = 3 if is_selected else 1
         border_color = "white" if is_selected else "#808080"
-        bg_style = f"background-color: {self._enum_to_hex(self._color)};" if self._color != Color.UNKNOWN else ""
+        bg_color = self._flash_color if self._flash_color else self._enum_to_hex(self._color)
+        bg_style = f"background-color: {bg_color};" if bg_color != "transparent" else ""
         self.setStyleSheet(
             f"""
             QFrame {{
@@ -106,8 +118,8 @@ class CellFrame(QFrame):
         )
 
     def updateTextColor(self):
-        """Set text color based on background."""
-        if self._color in [Color.BLACK, Color.GREEN, Color.YELLOW]:
+        bg_color = self._flash_color if self._flash_color else self._enum_to_hex(self._color)
+        if bg_color in ["#000000", "#c9b458", "#6aaa64", "#ff0000"]:
             self.label.setStyleSheet("color: white; border: none; background: transparent; outline: none;")
         else:
             self.label.setStyleSheet("color: inherit; border: none; background: transparent; outline: none;")
@@ -129,7 +141,6 @@ class CellFrame(QFrame):
         return self.label.text()
 
 class WordTableWidget(QTableWidget):
-    # Custom signal for when a new row is added (word and colors submitted)
     wordSubmitted = pyqtSignal(str, tuple)
     wordWithdrawn = pyqtSignal()
 
@@ -273,6 +284,66 @@ class WordTableWidget(QTableWidget):
                 self.allowed_colors[i] = [Color.UNKNOWN]
         print(f"Updated allowed_colors: {[ [c.name for c in colors] for colors in self.allowed_colors]}")
 
+    def flashRow(self):
+        last_row = self.rowCount() - 1
+        if last_row < 0:
+            print("flashRow: No rows available")
+            return
+        original_colors = []
+        for col in range(self.columnCount()):
+            frame = self.cellWidget(last_row, col)
+            if frame:
+                original_colors.append(frame.color)
+                frame.set_flash_color("#ff0000")
+        QTimer.singleShot(400, lambda: self._revertRowColors(last_row, original_colors))
+        print(f"flashRow: Flashed row {last_row} red")
+
+    def _revertRowColors(self, row, original_colors):
+        for col, color in enumerate(original_colors):
+            frame = self.cellWidget(row, col)
+            if frame:
+                frame.clear_flash_color()
+        print(f"_revertRowColors: Restored colors for row {row}")
+
+    @pyqtSlot()
+    def insertNewRow(self):
+        print(f"insertNewRow: Adding new row")
+        current_row = self.rowCount() - 1
+        if current_row < 0:
+            print("insertNewRow: No rows available")
+            return
+        new_row = self.rowCount()
+        self.insertRow(new_row)
+        viewport_width = self.viewport().width()
+        cell_size = viewport_width // self.columnCount()
+        inner_size = cell_size - 2 - 10
+        font_size = int(inner_size * self.font_size_ratio)
+        for col in range(self.columnCount()):
+            frame = CellFrame("", Color.UNKNOWN, font_size)
+            self.setCellWidget(new_row, col, frame)
+            frame.setMinimumSize(inner_size, inner_size)
+            frame.setMaximumSize(inner_size, inner_size)
+        self.setRowHeight(new_row, cell_size)
+        self.setCurrentCell(new_row, 0)
+        self.prev_focused_cell = (new_row, 0)
+        self.update_allowed_colors()
+        print(f"insertNewRow: Added row {new_row}, set focus to col=0")
+
+    @pyqtSlot(int, int)
+    def handleCellPressed(self, row, col):
+        frame = self.cellWidget(row, col)
+        if row != self.rowCount() - 1 or not frame.text():
+            return
+        allowed = self.allowed_colors[col]
+        valid_colors = [Color.BLACK, Color.YELLOW, Color.GREEN, Color.UNKNOWN]
+        if not allowed or not all(isinstance(c, Color) and c in valid_colors for c in allowed):
+            allowed = [Color.BLACK]
+        if allowed and allowed != [Color.UNKNOWN]:
+            current_color = frame.color
+            next_color = get_next_color(current_color, allowed)
+            frame.set_color(next_color)
+            frame.update()
+            print(f"Cell pressed: row={row}, col={col}, text={frame.text()}, cycled {current_color.name} -> {next_color.name}")
 
     def clear(self):
         """Override clear to reset to one blank row."""
@@ -498,23 +569,7 @@ class WordTableWidget(QTableWidget):
                     word = ''.join(self.cellWidget(current_row, c).text() for c in range(self.columnCount()))
                     enum_colors = tuple(self.cellWidget(current_row, c).color for c in range(self.columnCount()))
                     self.wordSubmitted.emit(word, enum_colors)
-                    print(f"Emitted wordSubmitted: word='{word}', colors={[c.name for c in enum_colors]}")
-                    new_row = self.rowCount()
-                    self.insertRow(new_row)
-                    viewport_width = self.viewport().width()
-                    cell_size = viewport_width // self.columnCount()
-                    inner_size = cell_size - 2 - 10
-                    font_size = int(inner_size * self.font_size_ratio)
-                    for col in range(self.columnCount()):
-                        frame = CellFrame("", Color.UNKNOWN, font_size)
-                        self.setCellWidget(new_row, col, frame)
-                        frame.setMinimumSize(inner_size, inner_size)
-                        frame.setMaximumSize(inner_size, inner_size)
-                    self.setRowHeight(new_row, cell_size)
-                    self.setCurrentCell(new_row, 0)
-                    self.prev_focused_cell = (new_row, 0)
-                    self.update_allowed_colors()
-                    print(f"Enter: row={new_row}, col=0, prev_focused={self.prev_focused_cell}")
+                    print(f"keyPressEvent: Emitted wordSubmitted: word='{word}', colors={[c.name for c in enum_colors]}")
             return
 
         if (
@@ -618,6 +673,10 @@ class MainWindow(QMainWindow):
         reset_button.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         reset_button.setProperty('keyName', 'Key_Delete')
         keyboard_layout.addWidget(reset_button, 2, 9)
+        flash_button = QPushButton("FLASH", keyboard_widget)
+        flash_button.setFixedSize(60, button_size)
+        flash_button.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        keyboard_layout.addWidget(flash_button, 2, 10)
         main_layout.addWidget(keyboard_widget)
         self.list_widget.itemClicked.connect(self.table.onListItemSelected)
         self.table.wordSubmitted.connect(self.onWordSubmitted)
@@ -627,8 +686,13 @@ class MainWindow(QMainWindow):
         enter_button.clicked.connect(self.table.onVirtualKeyPressed)
         back_button.clicked.connect(self.table.onVirtualKeyPressed)
         reset_button.clicked.connect(self.table.clear)
+        flash_button.clicked.connect(self.onFlashButtonClicked)
         self.table.set_color_callback(self.table.default_color_callback)
         QApplication.instance().setDoubleClickInterval(100)
+
+    def onFlashButtonClicked(self):
+        print("onFlashButtonClicked: FLASH button clicked")
+        self.table.flashRow()
 
     def onWordSubmitted(self, word, colors):
         print(f"Received wordSubmitted: word='{word}', colors={[c.name for c in colors]}")

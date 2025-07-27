@@ -72,14 +72,14 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         #self.key_ENTER.setStyleSheet("background-color: red; color: white; :disabled {background-color: gray; color: black;} :enabled {background-color: green; color: white;}")
         # self.key_ENTER.setStyleSheet(":disabled {background-color: gray; color: darkgray;} :enabled {background-color: green; color: white;}")
 
-        self.key_A.setStyleSheet("""
-            QPushButton {
-                background-color: #ffa500;
-                border: 5px solid #15cb1b;
-                border-style: solid;
-                border-radius: 5px
-            }
-        """)
+        # self.key_A.setStyleSheet("""
+        #     QPushButton {
+        #         background-color: #ffa500;
+        #         border: 5px solid #15cb1b;
+        #         border-style: solid;
+        #         border-radius: 5px
+        #     }
+        # """)
         
         self.guessDisplay.set_color_callback(self.guess.get_allowed_colors_by_slot)
 
@@ -122,12 +122,19 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
     def onWordSubmitted(self, word=None, colors=None):
         """Slot to handle wordSubmitted signal."""
 
-        self.guess.update_guess_result(word, colors)
-
-
         print(f"Received wordSubmitted: '{word} {colors}'")
 
-        self.spawnSuggestionGetter()
+        if not word or (self.guess.tree and word in self.guess.tree.word_idx):
+            if word is not None:
+                self.guessDisplay.insertNewRow()
+
+            self.guess.update_guess_result(word, colors)
+            self.spawnSuggestionGetter()
+        else:
+
+            self.guessDisplay.flashRow()
+            self.statusBar.showMessage('Invalid Word choice. Did you enter it correctly?')
+
 
 
     def spawnSuggestionGetter(self):
