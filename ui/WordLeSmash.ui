@@ -10,11 +10,35 @@
     <height>880</height>
    </rect>
   </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
   <property name="windowTitle">
    <string>Word Le Smash</string>
   </property>
+  <property name="iconSize">
+   <size>
+    <width>32</width>
+    <height>32</height>
+   </size>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_4">
+    <property name="leftMargin">
+     <number>2</number>
+    </property>
+    <property name="topMargin">
+     <number>2</number>
+    </property>
+    <property name="rightMargin">
+     <number>2</number>
+    </property>
+    <property name="bottomMargin">
+     <number>2</number>
+    </property>
     <item>
      <widget class="QFrame" name="headerBar">
       <property name="sizePolicy">
@@ -23,169 +47,271 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="1,0,1">
+      <property name="frameShape">
+       <enum>QFrame::Shape::StyledPanel</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Shadow::Raised</enum>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_2">
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
        <item>
-        <layout class="QHBoxLayout" name="subHeaderLeft">
-         <item>
-          <widget class="QFrame" name="spinnerFrame">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>30</width>
-             <height>30</height>
-            </size>
-           </property>
-           <layout class="QHBoxLayout" name="horizontalLayout">
-            <item>
-             <widget class="QtWaitingSpinner" name="waitingSpinner" native="true">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="minimumSize">
-               <size>
-                <width>30</width>
-                <height>30</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="QProgressBar" name="progressBar">
-           <property name="value">
-            <number>0</number>
-           </property>
-           <property name="textVisible">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
+        <widget class="QFrame" name="leftHeaderFrame">
+         <property name="frameShape">
+          <enum>QFrame::Shape::StyledPanel</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Shadow::Raised</enum>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout_3">
+          <property name="spacing">
+           <number>2</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QToolButton" name="mainMenuButton">
+            <property name="minimumSize">
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">border: none</string>
+            </property>
+            <property name="text">
+             <string>...</string>
+            </property>
+            <property name="icon">
+             <iconset resource="wordlesmash.qrc">
+              <normaloff>:/icons/open-menu-symbolic.svg</normaloff>:/icons/open-menu-symbolic.svg</iconset>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="popupMode">
+             <enum>QToolButton::ToolButtonPopupMode::InstantPopup</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QFrame" name="spinnerFrame">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout">
+             <property name="spacing">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QtWaitingSpinner" name="waitingSpinner" native="true">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>32</width>
+                 <height>32</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>69</width>
+              <height>29</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="subHeaderMiddle">
-         <item>
-          <widget class="QLabel" name="titleLabel">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>50</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">font-size: 36px; font-weight: bold; color: white; font-family: Arial;</string>
-           </property>
-           <property name="text">
-            <string>Word Le SMASH!</string>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignHCenter|Qt::AlignmentFlag::AlignTop</set>
-           </property>
-          </widget>
-         </item>
-        </layout>
+        <widget class="QLabel" name="titleLabel">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>50</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <family>FreeSans</family>
+           <pointsize>32</pointsize>
+           <bold>true</bold>
+           <kerning>true</kerning>
+          </font>
+         </property>
+         <property name="text">
+          <string>Word Le SMASH!</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignmentFlag::AlignCenter</set>
+         </property>
+         <property name="indent">
+          <number>0</number>
+         </property>
+        </widget>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="subHeaderRight">
-         <item>
-          <spacer name="horizontalSpacer_2">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QPushButton" name="stopButton">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>30</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset theme="process-stop"/>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="resetButton">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>30</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="focusPolicy">
-            <enum>Qt::FocusPolicy::NoFocus</enum>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">background-color: #818384; color: white; font-size: 18px; font-weight: bold; border-radius: 5px;</string>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset theme="view-refresh"/>
-           </property>
-           <property name="iconSize">
-            <size>
-             <width>32</width>
-             <height>32</height>
-            </size>
-           </property>
-          </widget>
-         </item>
-        </layout>
+        <widget class="QFrame" name="rightHeaderFrame">
+         <property name="frameShape">
+          <enum>QFrame::Shape::StyledPanel</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Shadow::Raised</enum>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout_4">
+          <property name="spacing">
+           <number>2</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <spacer name="horizontalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>6</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QToolButton" name="stopButton">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">border: none</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset theme="process-stop"/>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QToolButton" name="resetButton">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">border: none</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset theme="view-refresh"/>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
        </item>
       </layout>
      </widget>
@@ -205,7 +331,13 @@
        <property name="orientation">
         <enum>Qt::Orientation::Vertical</enum>
        </property>
-       <widget class="QFrame" name="strategicFrame">
+       <widget class="QFrame" name="decisionTreeFrame">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
         <property name="maximumSize">
          <size>
           <width>250</width>
@@ -224,17 +356,140 @@
         <property name="midLineWidth">
          <number>0</number>
         </property>
+        <layout class="QVBoxLayout" name="verticalLayout_2">
+         <property name="spacing">
+          <number>2</number>
+         </property>
+         <property name="leftMargin">
+          <number>2</number>
+         </property>
+         <property name="topMargin">
+          <number>2</number>
+         </property>
+         <property name="rightMargin">
+          <number>2</number>
+         </property>
+         <property name="bottomMargin">
+          <number>2</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="decisionTreeLabel">
+           <property name="toolTip">
+            <string>Picks for which an optimal path to every remaining solution candidate has been mapped </string>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Shape::NoFrame</enum>
+           </property>
+           <property name="lineWidth">
+            <number>1</number>
+           </property>
+           <property name="text">
+            <string>Charted Tree Picks</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QListWidget" name="decisionTreeListWidget">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <family>Liberation Mono</family>
+             <pointsize>18</pointsize>
+            </font>
+           </property>
+           <property name="focusPolicy">
+            <enum>Qt::FocusPolicy::NoFocus</enum>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Shape::Box</enum>
+           </property>
+           <property name="midLineWidth">
+            <number>1</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QFrame" name="strategicPicksFrame">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>250</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::Shape::StyledPanel</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Shadow::Plain</enum>
+        </property>
+        <property name="midLineWidth">
+         <number>2</number>
+        </property>
         <layout class="QVBoxLayout" name="verticalLayout_3">
+         <property name="spacing">
+          <number>2</number>
+         </property>
+         <property name="leftMargin">
+          <number>2</number>
+         </property>
+         <property name="topMargin">
+          <number>2</number>
+         </property>
+         <property name="rightMargin">
+          <number>2</number>
+         </property>
+         <property name="bottomMargin">
+          <number>2</number>
+         </property>
          <item>
           <widget class="QLabel" name="strategicLabel">
+           <property name="toolTip">
+            <string>Picks that are highly effective at narrowing the pool of solution candidates based on heuristic analysis, though not as optimized as Charted Tree Picks.</string>
+           </property>
            <property name="layoutDirection">
             <enum>Qt::LayoutDirection::LeftToRight</enum>
            </property>
            <property name="text">
             <string>Strategic Picks</string>
            </property>
+           <property name="scaledContents">
+            <bool>false</bool>
+           </property>
            <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignCenter</set>
+            <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
            </property>
           </widget>
          </item>
@@ -284,6 +539,18 @@
         </layout>
        </widget>
        <widget class="QFrame" name="solutionFrame">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
         <property name="maximumSize">
          <size>
           <width>250</width>
@@ -299,24 +566,58 @@
         <property name="midLineWidth">
          <number>2</number>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_2">
-         <item>
+        <layout class="QGridLayout" name="gridLayout">
+         <property name="leftMargin">
+          <number>2</number>
+         </property>
+         <property name="topMargin">
+          <number>2</number>
+         </property>
+         <property name="rightMargin">
+          <number>2</number>
+         </property>
+         <property name="bottomMargin">
+          <number>2</number>
+         </property>
+         <property name="spacing">
+          <number>2</number>
+         </property>
+         <item row="0" column="0">
           <widget class="QLabel" name="solutionLabel">
+           <property name="toolTip">
+            <string>The remaining pool of valid solution candidates according to color clues given for previous picks</string>
+           </property>
            <property name="frameShape">
             <enum>QFrame::Shape::NoFrame</enum>
            </property>
            <property name="lineWidth">
-            <number>1</number>
+            <number>0</number>
+           </property>
+           <property name="midLineWidth">
+            <number>0</number>
            </property>
            <property name="text">
-            <string>Valid Solutions</string>
+            <string>Solution Candidates</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLabel" name="solutionCountLabel">
+           <property name="lineWidth">
+            <number>0</number>
+           </property>
+           <property name="text">
+            <string>0</string>
            </property>
            <property name="alignment">
             <set>Qt::AlignmentFlag::AlignCenter</set>
            </property>
           </widget>
          </item>
-         <item>
+         <item row="1" column="0" colspan="2">
           <widget class="QListWidget" name="solutionListWidget">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
@@ -1129,6 +1430,12 @@
               <height>50</height>
              </size>
             </property>
+            <property name="font">
+             <font>
+              <pointsize>-1</pointsize>
+              <bold>true</bold>
+             </font>
+            </property>
             <property name="focusPolicy">
              <enum>Qt::FocusPolicy::NoFocus</enum>
             </property>
@@ -1155,8 +1462,78 @@
    </layout>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
+  <action name="mainMenuAction">
+   <property name="icon">
+    <iconset theme="format-justify-fill"/>
+   </property>
+   <property name="text">
+    <string>Main</string>
+   </property>
+   <property name="toolTip">
+    <string>Main Menu</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::PreferencesRole</enum>
+   </property>
+  </action>
+  <action name="stopAction">
+   <property name="icon">
+    <iconset theme="process-stop"/>
+   </property>
+   <property name="text">
+    <string>Stop</string>
+   </property>
+   <property name="toolTip">
+    <string>Stop</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionReset">
+   <property name="icon">
+    <iconset theme="view-refresh"/>
+   </property>
+   <property name="text">
+    <string>Reset</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionPreferences">
+   <property name="text">
+    <string>&amp;Preferences</string>
+   </property>
+   <property name="toolTip">
+    <string>Preferences</string>
+   </property>
+   <property name="shortcut">
+    <string>Alt+P</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::PreferencesRole</enum>
+   </property>
+  </action>
+  <action name="actionAbout_WordLeSmash">
+   <property name="text">
+    <string>About Word Le SMASH!</string>
+   </property>
+   <property name="toolTip">
+    <string>About Word Le SMASH!</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::AboutRole</enum>
+   </property>
+  </action>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>QtWaitingSpinner</class>
+   <extends>QWidget</extends>
+   <header>ui/QtWaitingSpinner/waitingspinnerwidget.h</header>
+   <container>1</container>
+  </customwidget>
   <customwidget>
    <class>WordTableWidget</class>
    <extends>QTableWidget</extends>
@@ -1166,19 +1543,13 @@
     <slot>onVirtualKeyPressed()</slot>
    </slots>
   </customwidget>
-  <customwidget>
-   <class>QtWaitingSpinner</class>
-   <extends>QWidget</extends>
-   <header>ui/QtWaitingSpinner/waitingspinnerwidget.h</header>
-   <container>1</container>
-  </customwidget>
  </customwidgets>
  <tabstops>
   <tabstop>guessDisplay</tabstop>
-  <tabstop>solutionListWidget</tabstop>
-  <tabstop>strategicListWidget</tabstop>
  </tabstops>
- <resources/>
+ <resources>
+  <include location="wordlesmash.qrc"/>
+ </resources>
  <connections>
   <connection>
    <sender>strategicListWidget</sender>
@@ -1223,8 +1594,8 @@
      <y>250</y>
     </hint>
     <hint type="destinationlabel">
-     <x>135</x>
-     <y>396</y>
+     <x>147</x>
+     <y>675</y>
     </hint>
    </hints>
   </connection>
@@ -1255,8 +1626,8 @@
      <y>248</y>
     </hint>
     <hint type="destinationlabel">
-     <x>77</x>
-     <y>405</y>
+     <x>89</x>
+     <y>675</y>
     </hint>
    </hints>
   </connection>
@@ -1283,8 +1654,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>66</x>
-     <y>704</y>
+     <x>95</x>
+     <y>797</y>
     </hint>
     <hint type="destinationlabel">
      <x>329</x>
@@ -1299,12 +1670,12 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>36</x>
-     <y>650</y>
+     <x>38</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
-     <x>251</x>
-     <y>618</y>
+     <x>507</x>
+     <y>678</y>
     </hint>
    </hints>
   </connection>
@@ -1315,8 +1686,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>111</x>
-     <y>637</y>
+     <x>127</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
      <x>290</x>
@@ -1331,8 +1702,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>163</x>
-     <y>648</y>
+     <x>194</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
      <x>315</x>
@@ -1347,12 +1718,12 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>228</x>
-     <y>644</y>
+     <x>260</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
-     <x>250</x>
-     <y>598</y>
+     <x>506</x>
+     <y>658</y>
     </hint>
    </hints>
   </connection>
@@ -1363,8 +1734,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>280</x>
-     <y>645</y>
+     <x>326</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
      <x>349</x>
@@ -1379,8 +1750,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>345</x>
-     <y>661</y>
+     <x>392</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
      <x>389</x>
@@ -1395,8 +1766,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>404</x>
-     <y>647</y>
+     <x>458</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
      <x>421</x>
@@ -1411,8 +1782,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>446</x>
-     <y>643</y>
+     <x>525</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
      <x>466</x>
@@ -1427,8 +1798,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>503</x>
-     <y>648</y>
+     <x>591</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
      <x>511</x>
@@ -1443,8 +1814,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>563</x>
-     <y>648</y>
+     <x>657</x>
+     <y>741</y>
     </hint>
     <hint type="destinationlabel">
      <x>558</x>
@@ -1459,12 +1830,12 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>127</x>
-     <y>714</y>
+     <x>159</x>
+     <y>797</y>
     </hint>
     <hint type="destinationlabel">
-     <x>240</x>
-     <y>599</y>
+     <x>496</x>
+     <y>659</y>
     </hint>
    </hints>
   </connection>
@@ -1475,8 +1846,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>197</x>
-     <y>690</y>
+     <x>224</x>
+     <y>797</y>
     </hint>
     <hint type="destinationlabel">
      <x>281</x>
@@ -1491,8 +1862,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>248</x>
-     <y>719</y>
+     <x>288</x>
+     <y>797</y>
     </hint>
     <hint type="destinationlabel">
      <x>293</x>
@@ -1507,8 +1878,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>307</x>
-     <y>727</y>
+     <x>353</x>
+     <y>797</y>
     </hint>
     <hint type="destinationlabel">
      <x>377</x>
@@ -1523,8 +1894,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>348</x>
-     <y>701</y>
+     <x>417</x>
+     <y>797</y>
     </hint>
     <hint type="destinationlabel">
      <x>397</x>
@@ -1539,8 +1910,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>415</x>
-     <y>715</y>
+     <x>482</x>
+     <y>797</y>
     </hint>
     <hint type="destinationlabel">
      <x>450</x>
@@ -1555,8 +1926,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>465</x>
-     <y>717</y>
+     <x>546</x>
+     <y>797</y>
     </hint>
     <hint type="destinationlabel">
      <x>491</x>
@@ -1571,8 +1942,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>530</x>
-     <y>710</y>
+     <x>611</x>
+     <y>797</y>
     </hint>
     <hint type="destinationlabel">
      <x>531</x>
@@ -1587,8 +1958,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>23</x>
-     <y>760</y>
+     <x>25</x>
+     <y>853</y>
     </hint>
     <hint type="destinationlabel">
      <x>260</x>
@@ -1603,8 +1974,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>116</x>
-     <y>750</y>
+     <x>129</x>
+     <y>853</y>
     </hint>
     <hint type="destinationlabel">
      <x>285</x>
@@ -1619,8 +1990,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>153</x>
-     <y>773</y>
+     <x>195</x>
+     <y>853</y>
     </hint>
     <hint type="destinationlabel">
      <x>299</x>
@@ -1635,8 +2006,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>226</x>
-     <y>776</y>
+     <x>262</x>
+     <y>853</y>
     </hint>
     <hint type="destinationlabel">
      <x>307</x>
@@ -1651,8 +2022,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>283</x>
-     <y>785</y>
+     <x>329</x>
+     <y>853</y>
     </hint>
     <hint type="destinationlabel">
      <x>335</x>
@@ -1667,8 +2038,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>343</x>
-     <y>751</y>
+     <x>396</x>
+     <y>853</y>
     </hint>
     <hint type="destinationlabel">
      <x>381</x>
@@ -1683,8 +2054,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>406</x>
-     <y>768</y>
+     <x>463</x>
+     <y>853</y>
     </hint>
     <hint type="destinationlabel">
      <x>445</x>
@@ -1699,8 +2070,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>463</x>
-     <y>760</y>
+     <x>529</x>
+     <y>853</y>
     </hint>
     <hint type="destinationlabel">
      <x>474</x>
@@ -1715,12 +2086,44 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>503</x>
-     <y>754</y>
+     <x>657</x>
+     <y>853</y>
     </hint>
     <hint type="destinationlabel">
      <x>506</x>
      <y>589</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>mainMenuButton</sender>
+   <signal>triggered(QAction*)</signal>
+   <receiver>mainMenuAction</receiver>
+   <slot>trigger()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>22</x>
+     <y>27</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>mainMenuButton</sender>
+   <signal>clicked()</signal>
+   <receiver>actionPreferences</receiver>
+   <slot>trigger()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>21</x>
+     <y>28</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>-1</x>
+     <y>-1</y>
     </hint>
    </hints>
   </connection>

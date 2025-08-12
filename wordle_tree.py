@@ -264,7 +264,7 @@ class OptionNode:
 
 
 class WordleTree():
-    def __init__(self, all_candidates, all_picks, dt=None, branch_rules=None):
+    def __init__(self, all_candidates, all_picks, dt=None, branch_rules=None, cache_path=None):
 
         # Remove duplicates and maintaining order, while guaranteeing picks
         # are the first candidates
@@ -286,7 +286,7 @@ class WordleTree():
         else:
             self.branch_rules = SortedDict(branch_rules) # these were the default paramaters
 
-        filename = self.gen_matrix_filename()
+        filename = os.sep.join([cache_path, self.gen_matrix_filename()])
 
         try:
             self.clue_matrix = np.load(filename)
@@ -331,7 +331,7 @@ class WordleTree():
         '''
         self.branch_rules = SortedDict(branch_rules)
 
-    def gen_matrix_filename(self, template='.cache/wordle_matrix_{}.npy'):
+    def gen_matrix_filename(self, template='word_matrix_{}.npy'):
         ''' Hash word lists to create a suffix for a np matrix name
         '''
         candidates = sorted(set(self._all_candidates))
