@@ -56,45 +56,42 @@
       <item>
        <widget class="QTabWidget" name="preferencesTabWidget">
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="mainPreferencesTab">
          <attribute name="title">
           <string>Main</string>
          </attribute>
-         <layout class="QGridLayout" name="gridLayout" columnstretch="0,1,1,0,1,1">
+         <layout class="QGridLayout" name="gridLayout" columnstretch="0,1,1,0,1,1,0">
           <property name="leftMargin">
            <number>9</number>
           </property>
-          <item row="2" column="1">
-           <widget class="QSpinBox" name="wordLengthSpinBox">
+          <item row="2" column="1" colspan="3">
+           <widget class="QComboBox" name="gameTypeComboBox">
             <property name="sizePolicy">
-             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
-            <property name="minimumSize">
-             <size>
-              <width>80</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
-            </property>
-            <property name="minimum">
-             <number>1</number>
-            </property>
-            <property name="maximum">
-             <number>20</number>
-            </property>
-            <property name="value">
-             <number>5</number>
-            </property>
+            <item>
+             <property name="text">
+              <string>NYT - Normal Mode</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>NYT - Hard Mode</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Absurdle</string>
+             </property>
+            </item>
            </widget>
           </item>
-          <item row="0" column="1" colspan="2">
+          <item row="0" column="1" colspan="3">
            <widget class="QComboBox" name="profileComboBox">
             <property name="sizePolicy">
              <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
@@ -112,7 +109,128 @@
             </item>
            </widget>
           </item>
-          <item row="3" column="0" colspan="6">
+          <item row="0" column="4">
+           <widget class="QFrame" name="profileButtonsFrame">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="lineWidth">
+             <number>0</number>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_4">
+             <property name="spacing">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QToolButton" name="addProfileButton">
+               <property name="styleSheet">
+                <string notr="true">border: none</string>
+               </property>
+               <property name="text">
+                <string>+</string>
+               </property>
+               <property name="icon">
+                <iconset theme="list-add"/>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QToolButton" name="removeProfileButton">
+               <property name="styleSheet">
+                <string notr="true">border: none</string>
+               </property>
+               <property name="text">
+                <string>...</string>
+               </property>
+               <property name="icon">
+                <iconset theme="list-remove"/>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QToolButton" name="copyProfileButton">
+               <property name="styleSheet">
+                <string notr="true">border: none</string>
+               </property>
+               <property name="text">
+                <string>...</string>
+               </property>
+               <property name="icon">
+                <iconset theme="edit-copy"/>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item row="0" column="5" colspan="2">
+           <spacer name="horizontalSpacer_8">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item row="2" column="6">
+           <spacer name="horizontalSpacer_7">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="gameTypeLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Game Type</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="wordLengthLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Word Length </string>
+            </property>
+            <property name="margin">
+             <number>0</number>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0" colspan="7">
            <widget class="QFrame" name="frame">
             <layout class="QHBoxLayout" name="horizontalLayout_8">
              <property name="spacing">
@@ -390,86 +508,6 @@
             </layout>
            </widget>
           </item>
-          <item row="1" column="1" colspan="2">
-           <widget class="QComboBox" name="gameTypeComboBox">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <item>
-             <property name="text">
-              <string>NYT - Normal Mode</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>NYT - Hard Mode</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Absurdle</string>
-             </property>
-            </item>
-           </widget>
-          </item>
-          <item row="0" column="4" colspan="2">
-           <spacer name="horizontalSpacer_8">
-            <property name="orientation">
-             <enum>Qt::Orientation::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-          <item row="1" column="5">
-           <spacer name="horizontalSpacer_7">
-            <property name="orientation">
-             <enum>Qt::Orientation::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="wordLengthLabel">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text">
-             <string>Word Length </string>
-            </property>
-            <property name="margin">
-             <number>0</number>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="gameTypeLabel">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text">
-             <string>Game Type</string>
-            </property>
-           </widget>
-          </item>
           <item row="0" column="0">
            <widget class="QLabel" name="profileLabel">
             <property name="sizePolicy">
@@ -483,70 +521,38 @@
             </property>
            </widget>
           </item>
-          <item row="0" column="3">
-           <widget class="QFrame" name="profileButtonsFrame">
+          <item row="1" column="1">
+           <widget class="QLabel" name="wordLengthDisplayLabel">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
+            <property name="toolTip">
+             <string>The word length for a profile is fixed after creation.</string>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">padding: 2px 10px;</string>
+            </property>
+            <property name="frameShape">
+             <enum>QFrame::Shape::Panel</enum>
+            </property>
+            <property name="frameShadow">
+             <enum>QFrame::Shadow::Sunken</enum>
+            </property>
             <property name="lineWidth">
+             <number>2</number>
+            </property>
+            <property name="midLineWidth">
              <number>0</number>
             </property>
-            <layout class="QHBoxLayout" name="horizontalLayout_4">
-             <property name="spacing">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QToolButton" name="addProfileButton">
-               <property name="styleSheet">
-                <string notr="true">border: none</string>
-               </property>
-               <property name="text">
-                <string>+</string>
-               </property>
-               <property name="icon">
-                <iconset theme="list-add"/>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QToolButton" name="removeProfileButton">
-               <property name="styleSheet">
-                <string notr="true">border: none</string>
-               </property>
-               <property name="text">
-                <string>...</string>
-               </property>
-               <property name="icon">
-                <iconset theme="list-remove"/>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QToolButton" name="copyProfileButton">
-               <property name="styleSheet">
-                <string notr="true">border: none</string>
-               </property>
-               <property name="text">
-                <string>...</string>
-               </property>
-               <property name="icon">
-                <iconset theme="edit-copy"/>
-               </property>
-              </widget>
-             </item>
-            </layout>
+            <property name="text">
+             <string>5</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignmentFlag::AlignCenter</set>
+            </property>
            </widget>
           </item>
          </layout>

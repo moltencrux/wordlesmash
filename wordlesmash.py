@@ -4,7 +4,9 @@ from PyQt6.QtCore import (QCoreApplication, QSettings, QStandardPaths, Qt,
                           pyqtSlot, pyqtSignal, QObject, QThread)
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QDialog, QListWidgetItem,
-                             QMessageBox, QItemDelegate, QLineEdit, QListWidget)
+                             QMessageBox, QItemDelegate, QLineEdit, QListWidget,
+                             QFormLayout, QSpinBox, QDialogButtonBox)
+                             
 from PyQt6.QtGui import QColorConstants, QValidator, QFont
 from threading import Event
 from importlib.resources import files
@@ -42,9 +44,11 @@ def pathhelper(resource, package='ui'):
 
 wordlesmash_ui_path = pathhelper('WordLeSmash.ui')
 preferences_ui_path = pathhelper('preferences.ui')
+newprofile_ui_path = pathhelper('NewProfile.ui')
 
 wordlesmash_ui_py_path = pathhelper('WordLeSmash_ui.py')
 preferences_ui_py_path = pathhelper('preferences_ui.py')
+newprofile_ui_py_path = pathhelper('NewProfile_ui.py')
 wordlesmash_rc_py_path = pathhelper('wordlesmash_rc.py')
 
 
@@ -56,8 +60,8 @@ qInitResources()
 
 # wordlesmash_rc_py_path
 
-match all_files_newer([wordlesmash_ui_path, preferences_ui_path],
-                      [wordlesmash_ui_py_path, preferences_ui_py_path]):
+match all_files_newer([wordlesmash_ui_path, preferences_ui_path, newprofile_ui_path],
+                      [wordlesmash_ui_py_path, preferences_ui_py_path, newprofile_ui_py_path]):
 
     case True:
         logging.debug('importing ui files')
@@ -65,10 +69,12 @@ match all_files_newer([wordlesmash_ui_path, preferences_ui_path],
         # Ui_MainWindow, _ = uic.loadUiType(wordlesmash_ui_path, from_imports=True, import_from='ui')
         Ui_MainWindow, _ = uic.loadUiType(wordlesmash_ui_path)
         Ui_preferences, _ = uic.loadUiType(preferences_ui_path)
+        Ui_NewProfile, _ = uic.loadUiType(newprofile_ui_path)
     case False:
         logging.debug('importing generated files')
         from ui.WordLeSmash_ui import Ui_MainWindow
         from ui.preferences_ui import Ui_preferences
+        from ui.NewProfile_ui import Ui_NewProfile
     case _:
         logging.critical('UI imports unavailable, exiting...')
         sys.exit(-1)
@@ -322,11 +328,26 @@ class UpperCaseDelegate(QItemDelegate):
         self.current_index = index
         return editor
 
+class NewProfileDialog(QDialog, Ui_NewProfile):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.initUI()
+
+    def initUI(self):
+        self.setupUi(self)
+
+    def accept(self):
+        if not self.nameEdit.text().strip():
+            QMessageBox.warning(self, "Invalid Name", "Profile name cannot be empty.")
+            return
+        super().accept()
+
 class MainPreferences(QDialog, Ui_preferences):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.settings = parent.settings or QSettings()
         self.app_data_path = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+        self.word_length = 5  # Default word length
         self.initUI()
     
     def initUI(self):
@@ -339,33 +360,22 @@ class MainPreferences(QDialog, Ui_preferences):
         self.addInitialPickButton.clicked.connect(self.addInitialPick)
         self.addPickButton.clicked.connect(self.addPick)
         self.addCandidateButton.clicked.connect(self.addCandidate)
-        # Connect itemChanged for validation
-        self.initialPicksList.itemChanged.connect(self.validateInitialPick)
-        self.picksList.itemChanged.connect(self.validatePick)
-        self.candidatesList.itemChanged.connect(self.validateCandidate)
-        delegate_initial = UpperCaseDelegate(self.wordLengthSpinBox.value(), self.initialPicksList)
+        self.removeInitialPickButton.clicked.connect(self.removeInitialPick)
+        self.removePickButton.clicked.connect(self.removePick)
+        self.removeCandidateButton.clicked.connect(self.removeCandidate)
+        self.addProfileButton.clicked.connect(self.addProfile)
+        delegate_initial = UpperCaseDelegate(self.word_length, self.initialPicksList)
         delegate_initial.closeEditor.connect(self.onCloseInitPicksEditor)
         self.initialPicksList.setItemDelegate(delegate_initial)
-        delegate_picks = UpperCaseDelegate(self.wordLengthSpinBox.value(), self.picksList)
+        delegate_picks = UpperCaseDelegate(self.word_length, self.picksList)
         delegate_picks.closeEditor.connect(self.onClosePicksEditor)
         self.picksList.setItemDelegate(delegate_picks)
-        delegate_candidates = UpperCaseDelegate(self.wordLengthSpinBox.value(), self.candidatesList)
+        delegate_candidates = UpperCaseDelegate(self.word_length, self.candidatesList)
         delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
         self.candidatesList.setItemDelegate(delegate_candidates)
-        self.wordLengthSpinBox.valueChanged.connect(self.updateDelegates)
+        # self.wordLengthSpinBox.setReadOnly(True)  # Make word length fixed for existing profiles
         self.loadSettings()
 
-    @pyqtSlot(int)
-    def updateDelegates(self, word_length):
-        delegate_initial = UpperCaseDelegate(word_length, self.initialPicksList)
-        delegate_initial.closeEditor.connect(self.onCloseInitPicksEditor)
-        self.initialPicksList.setItemDelegate(delegate_initial)
-        delegate_picks = UpperCaseDelegate(word_length, self.picksList)
-        delegate_picks.closeEditor.connect(self.onClosePicksEditor)
-        self.picksList.setItemDelegate(delegate_picks)
-        delegate_candidates = UpperCaseDelegate(word_length, self.candidatesList)
-        delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
-        self.candidatesList.setItemDelegate(delegate_candidates)
 
     def loadSettings(self):
         """Load the default profile and populate the profile combo box with all profiles."""
@@ -399,10 +409,8 @@ class MainPreferences(QDialog, Ui_preferences):
 
         game_type = self.settings.value("game_type", "wordle", type=str)
         self.gameTypeComboBox.setCurrentText(game_type)
-
-        word_length = self.settings.value("word_length", 5, type=int)
-        self.wordLengthSpinBox.setValue(word_length)
-
+        self.word_length = self.settings.value("word_length", 5, type=int)
+        self.wordLengthDisplayLabel.setText(str(self.word_length))
         initial_picks = self.settings.value("initial_picks", "CRANE\nSLATE", type=str)
         self.initialPicksList.clear()
         if initial_picks:
@@ -438,13 +446,26 @@ class MainPreferences(QDialog, Ui_preferences):
 
         dtree_dir = Path(self.app_data_path) / "profiles" / profile_name / "dtree"
         self.decisionTreeList.clear()
-        default_trees = ["output_dt_rance.5"]
+        default_trees = []
         if dtree_dir.exists():
             for file_path in dtree_dir.glob("*.txt"):
                 self.decisionTreeList.addItem(file_path.stem)
         else:
             for tree in default_trees:
                 self.decisionTreeList.addItem(tree)
+        # Update delegates with new word length
+        self.updateDelegates()
+
+    def updateDelegates(self):
+        delegate_initial = UpperCaseDelegate(self.word_length, self.initialPicksList)
+        delegate_initial.closeEditor.connect(self.onCloseInitPicksEditor)
+        self.initialPicksList.setItemDelegate(delegate_initial)
+        delegate_picks = UpperCaseDelegate(self.word_length, self.picksList)
+        delegate_picks.closeEditor.connect(self.onClosePicksEditor)
+        self.picksList.setItemDelegate(delegate_picks)
+        delegate_candidates = UpperCaseDelegate(self.word_length, self.candidatesList)
+        delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
+        self.candidatesList.setItemDelegate(delegate_candidates)
 
     @pyqtSlot(QListWidgetItem)
     def validateInitialPick(self, item):
@@ -455,14 +476,12 @@ class MainPreferences(QDialog, Ui_preferences):
             pass
             return
         item.setText(text)
-        word_length = self.wordLengthSpinBox.value()
-        legal_picks = {self.picksList.item(i).text() for i in range(self.picksList.count())}
-        if len(text) != word_length or not text.isalpha():
-            QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {word_length} alphabetic characters long.")
+        if len(text) != self.word_length or not text.isalpha():
+            QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
             self.initialPicksList.takeItem(self.initialPicksList.row(item))
             return
-
-        elif text not in legal_picks:
+        legal_picks = {self.picksList.item(i).text() for i in range(self.picksList.count())}
+        if text not in legal_picks:
             reply = QMessageBox.question(self, "Add to Picks?", f"'{text}' is not in the legal picks. Add it to picks.txt?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
                 self.picksList.addItem(text)
@@ -479,9 +498,8 @@ class MainPreferences(QDialog, Ui_preferences):
             self.picksList.takeItem(self.picksList.row(item))
             return
         item.setText(text)
-        word_length = self.wordLengthSpinBox.value()
-        if len(text) != word_length or not text.isalpha():
-            QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {word_length} alphabetic characters long.")
+        if len(text) != self.word_length or not text.isalpha():
+            QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
             self.picksList.takeItem(self.picksList.row(item))
             return
 
@@ -493,14 +511,11 @@ class MainPreferences(QDialog, Ui_preferences):
             self.candidatesList.takeItem(self.candidatesList.row(item))
             return
         item.setText(text)
-        word_length = self.wordLengthSpinBox.value()
-        legal_picks = [self.picksList.item(i).text() for i in range(self.picksList.count())]
-        if len(text) != word_length or not text.isalpha():
-            QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {word_length} alphabetic characters long.")
+        if len(text) != self.word_length or not text.isalpha():
+            QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
             self.candidatesList.takeItem(self.candidatesList.row(item))
             return
-
-        # Automatically add to picksList if not already present
+        legal_picks = [self.picksList.item(i).text() for i in range(self.picksList.count())]
         if text not in legal_picks:
             self.picksList.addItem(text)
             self.savePicksToFile()
@@ -563,6 +578,52 @@ class MainPreferences(QDialog, Ui_preferences):
             print(f"Failed to enter edit mode for candidatesList: {e}")
 
     @pyqtSlot()
+    def removeInitialPick(self):
+        current_row = self.initialPicksList.currentRow()
+        if current_row >= 0:
+            self.initialPicksList.takeItem(current_row)
+            self.saveSettings()
+
+    @pyqtSlot()
+    def removePick(self):
+        current_row = self.picksList.currentRow()
+        if current_row >= 0:
+            self.picksList.takeItem(current_row)
+            self.savePicksToFile()
+
+    @pyqtSlot()
+    def removeCandidate(self):
+        current_row = self.candidatesList.currentRow()
+        if current_row >= 0:
+            self.candidatesList.takeItem(current_row)
+            self.saveSettings()
+
+    @pyqtSlot()
+    def addProfile(self):
+        dialog = NewProfileDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            name = dialog.nameEdit.text().strip()
+            length = dialog.lengthSpinBox.value()
+            if self.profileComboBox.findText(name) >= 0:
+                QMessageBox.warning(self, "Duplicate Name", "A profile with this name already exists.")
+                return
+            self.settings.beginGroup(f"profiles/{name}")
+            self.settings.setValue("word_length", length)
+            self.settings.setValue("game_type", "wordle")  # Default game type
+
+            self.settings.endGroup()
+            profile_dir = Path(self.app_data_path) / "profiles" / name
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            # Create default picks and candidates files
+            picks_file = profile_dir / "picks.txt"
+            picks_file.touch()
+            candidates_file = profile_dir / "candidates.txt"
+            candidates_file.touch()
+
+            self.profileComboBox.addItem(name)
+            self.profileComboBox.setCurrentText(name)
+
+    @pyqtSlot()
     def saveSettings(self):
         """Save the current profile settings and default profile to QSettings and data files."""
         profile_name = self.profileComboBox.currentText()
@@ -573,11 +634,7 @@ class MainPreferences(QDialog, Ui_preferences):
 
         # Save game_type
         self.settings.setValue("game_type", self.gameTypeComboBox.currentText())
-
-        # Save word_length
-        self.settings.setValue("word_length", self.wordLengthSpinBox.value())
-
-        # Save initial picks to QSettings
+        self.settings.setValue("word_length", self.word_length)
         initial_picks = [self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count())]
         self.settings.setValue("initial_picks", "\n".join([pick for pick in initial_picks if pick.strip()]))
 
