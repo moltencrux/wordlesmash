@@ -1,0 +1,30 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Dot linear gradient -->
+    <linearGradient id="dotGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#66ccff"></stop>
+      <stop offset="100%" stop-color="#0066cc"></stop>
+    </linearGradient>
+
+    <!-- Glow gradient -->
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4da6ff" stop-opacity="0.6"></stop>
+      <stop offset="100%" stop-color="#001f4d" stop-opacity="0"></stop>
+    </radialGradient>
+
+    <!-- Blur filter -->
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1"></feGaussianBlur>
+    </filter>
+  </defs>
+
+  <!-- Glow circles -->
+  <circle cx="6" cy="24" r="5" fill="url(#glow)" filter="url(#blur)"></circle>
+  <circle cx="16" cy="24" r="5" fill="url(#glow)" filter="url(#blur)"></circle>
+  <circle cx="26" cy="24" r="5" fill="url(#glow)" filter="url(#blur)"></circle>
+
+  <!-- Main dots with thinner stroke -->
+  <circle cx="6" cy="24" r="3" fill="url(#dotGradient)" stroke="#004080" stroke-width="0.5"></circle>
+  <circle cx="16" cy="24" r="3" fill="url(#dotGradient)" stroke="#004080" stroke-width="0.5"></circle>
+  <circle cx="26" cy="24" r="3" fill="url(#dotGradient)" stroke="#004080" stroke-width="0.5"></circle>
+</svg>

@@ -15,6 +15,7 @@ from or_matrix import compute_or_matrix, is_or_matrix, find_closed_components
 from filter_code import FilterCode
 from scipy.sparse import lil_matrix
 from copy import deepcopy
+from pathlib import PosixPath
 # import threading
 import multiprocessing
 
@@ -856,22 +857,28 @@ class AbstractGuessManager(metaclass=ABCMeta):
         pass
 
 class DecisionTreeGuessManager(AbstractGuessManager):
-    def __init__(self, lexicon, candidates, dt=None, length=5):
+    def __init__(self, lexicon, candidates, dt=None, length=5, cache_path=None):
         # self.tree = read_decision_tree_set(filename)
-        if isinstance(lexicon, str):
+        if isinstance(lexicon, (str, PosixPath)):
             lexicon = [w for w in load_word_list(lexicon) if len(w) == length]
         self.lexicon = tuple(sorted(set(lexicon)))
 
-        if isinstance(candidates, str):
+        if isinstance(candidates, (str, PosixPath)):
             candidates = [w for w in load_word_list(candidates) if len(w) == length]
         self.candidates = tuple(sorted(set(candidates)))
 
-        if isinstance(dt, str):
+        if isinstance(dt, (str, PosixPath)):
             self.dt = read_decision_tree(dt)
         elif isinstance(dt, (list, tuple)):
             self.dt = routes_to_dt(dt)
         else:
             self.dt = dt if dt is not None else {}
+
+        if isinstance(cache_path, (str, PosixPath)):
+            self.cache_path = cache_path
+        else:
+            raise ValueError()
+        
 
         self.tree = None
         # self._cond = threading.Condition()
@@ -927,7 +934,7 @@ class DecisionTreeGuessManager(AbstractGuessManager):
         # pick_word_hist, clue_color_hist = tuple(zip(*self.state)) or ((), ())
 
         if not self.tree:
-            self.tree = WordleTree(self.candidates, self.lexicon, self.dt)
+            self.tree = WordleTree(self.candidates, self.lexicon, self.dt, cache_path=self.cache_path)
 
         def dt_lookup():
             branch = self.dt
