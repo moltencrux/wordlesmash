@@ -66,7 +66,18 @@ def read_decision_routes(file):
     routes = []
     with open(file, 'r') as f:
         # for line in f:
-        routes = tuple(tuple(line.upper().split()[::2]) for line in f)
+        # routes = []
+        # for line in f:
+        #     line = line.strip().upper()
+        #     if line:
+        #         route = line.split()[::2]
+        #         routes.append(route)
+        # fs = (line.strip() for line in f)
+
+        # routes = tuple(tuple(line.upper().split()[::2]) for line in f if line)
+
+        route_gen = (tuple(line.upper().split()[::2]) for line in f)
+        routes = tuple(route for route in route_gen if route)
 
     return tuple(routes)
 

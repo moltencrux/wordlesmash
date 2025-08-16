@@ -292,7 +292,7 @@ class WordleTree():
             self.clue_matrix = np.load(filename)
         except FileNotFoundError as e:
             logger.warning(f"No saved matrix data found, generating: {filename}")
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, EOFError) as e:
             logger.warning(dedent(f"""
                            Warning: Unable to read matrix data.
                            {format_exception_only(e)}
@@ -830,6 +830,15 @@ class WordleTree():
         return [*dt_picks.items()] + [(pick, clue_part) for score, pick, clue_part in best_n]
 
 
+    def gen_routes(self, pick, abort=None):
+
+        dt = {pick:{}}
+        routes = self.mod_dfs_beam_search(dt=dt, dt_depth=1, parallel=True,
+                                          abort=abort)
+        
+        return routes
+
+
 
 def score_distribution(distribution):
     ''' Return a score of distribution
@@ -1117,7 +1126,7 @@ def main():
                  filename=f'output_dt_{pick.lower()}.txt')
 
 
-if __name__ == '__main__':
+if __name__ == '__main__' and False:
 
     cProfile.run('main()', 'output.prof')
 

@@ -606,6 +606,9 @@
          </item>
          <item row="0" column="1">
           <widget class="QLabel" name="solutionCountLabel">
+           <property name="styleSheet">
+            <string notr="true">padding: 0 10px</string>
+           </property>
            <property name="lineWidth">
             <number>0</number>
            </property>
@@ -613,7 +616,7 @@
             <string>0</string>
            </property>
            <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignCenter</set>
+            <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
            </property>
           </widget>
          </item>
@@ -1574,8 +1577,8 @@
    <slot>onListItemSelected(QListWidgetItem*)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>168</x>
-     <y>487</y>
+     <x>173</x>
+     <y>681</y>
     </hint>
     <hint type="destinationlabel">
      <x>387</x>
@@ -1590,8 +1593,8 @@
    <slot>clearSelection()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>154</x>
-     <y>250</y>
+     <x>159</x>
+     <y>472</y>
     </hint>
     <hint type="destinationlabel">
      <x>147</x>
@@ -1622,8 +1625,8 @@
    <slot>clearSelection()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>77</x>
-     <y>248</y>
+     <x>82</x>
+     <y>472</y>
     </hint>
     <hint type="destinationlabel">
      <x>89</x>
@@ -1655,7 +1658,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>95</x>
-     <y>797</y>
+     <y>796</y>
     </hint>
     <hint type="destinationlabel">
      <x>329</x>
@@ -1670,8 +1673,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>38</x>
-     <y>741</y>
+     <x>40</x>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>507</x>
@@ -1687,7 +1690,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>127</x>
-     <y>741</y>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>290</x>
@@ -1703,7 +1706,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>194</x>
-     <y>741</y>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>315</x>
@@ -1719,7 +1722,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>260</x>
-     <y>741</y>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>506</x>
@@ -1735,7 +1738,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>326</x>
-     <y>741</y>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>349</x>
@@ -1751,7 +1754,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>392</x>
-     <y>741</y>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>389</x>
@@ -1767,7 +1770,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>458</x>
-     <y>741</y>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>421</x>
@@ -1783,7 +1786,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>525</x>
-     <y>741</y>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>466</x>
@@ -1799,7 +1802,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>591</x>
-     <y>741</y>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>511</x>
@@ -1815,7 +1818,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>657</x>
-     <y>741</y>
+     <y>740</y>
     </hint>
     <hint type="destinationlabel">
      <x>558</x>
@@ -1831,7 +1834,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>159</x>
-     <y>797</y>
+     <y>796</y>
     </hint>
     <hint type="destinationlabel">
      <x>496</x>
@@ -1847,7 +1850,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>224</x>
-     <y>797</y>
+     <y>796</y>
     </hint>
     <hint type="destinationlabel">
      <x>281</x>
@@ -1863,7 +1866,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>288</x>
-     <y>797</y>
+     <y>796</y>
     </hint>
     <hint type="destinationlabel">
      <x>293</x>
@@ -1879,7 +1882,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>353</x>
-     <y>797</y>
+     <y>796</y>
     </hint>
     <hint type="destinationlabel">
      <x>377</x>
@@ -1895,7 +1898,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>417</x>
-     <y>797</y>
+     <y>796</y>
     </hint>
     <hint type="destinationlabel">
      <x>397</x>
@@ -1911,7 +1914,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>482</x>
-     <y>797</y>
+     <y>796</y>
     </hint>
     <hint type="destinationlabel">
      <x>450</x>
@@ -1927,7 +1930,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>546</x>
-     <y>797</y>
+     <y>796</y>
     </hint>
     <hint type="destinationlabel">
      <x>491</x>
@@ -1943,7 +1946,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>611</x>
-     <y>797</y>
+     <y>796</y>
     </hint>
     <hint type="destinationlabel">
      <x>531</x>
@@ -1958,8 +1961,8 @@
    <slot>onVirtualKeyPressed()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>25</x>
-     <y>853</y>
+     <x>27</x>
+     <y>852</y>
     </hint>
     <hint type="destinationlabel">
      <x>260</x>
@@ -1975,7 +1978,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>129</x>
-     <y>853</y>
+     <y>852</y>
     </hint>
     <hint type="destinationlabel">
      <x>285</x>
@@ -1991,7 +1994,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>195</x>
-     <y>853</y>
+     <y>852</y>
     </hint>
     <hint type="destinationlabel">
      <x>299</x>
@@ -2007,7 +2010,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>262</x>
-     <y>853</y>
+     <y>852</y>
     </hint>
     <hint type="destinationlabel">
      <x>307</x>
@@ -2023,7 +2026,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>329</x>
-     <y>853</y>
+     <y>852</y>
     </hint>
     <hint type="destinationlabel">
      <x>335</x>
@@ -2039,7 +2042,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>396</x>
-     <y>853</y>
+     <y>852</y>
     </hint>
     <hint type="destinationlabel">
      <x>381</x>
@@ -2055,7 +2058,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>463</x>
-     <y>853</y>
+     <y>852</y>
     </hint>
     <hint type="destinationlabel">
      <x>445</x>
@@ -2071,7 +2074,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>529</x>
-     <y>853</y>
+     <y>852</y>
     </hint>
     <hint type="destinationlabel">
      <x>474</x>
@@ -2087,7 +2090,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>657</x>
-     <y>853</y>
+     <y>852</y>
     </hint>
     <hint type="destinationlabel">
      <x>506</x>
@@ -2124,6 +2127,150 @@
     <hint type="destinationlabel">
      <x>-1</x>
      <y>-1</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>decisionTreeListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>onListItemSelected(QListWidgetItem*)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>166</x>
+     <y>133</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>272</x>
+     <y>141</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>decisionTreeListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>solutionListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>175</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>126</x>
+     <y>593</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>decisionTreeListWidget</sender>
+   <signal>itemClicked(QListWidgetItem*)</signal>
+   <receiver>solutionListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>175</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>126</x>
+     <y>593</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>decisionTreeListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>strategicListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>175</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>126</x>
+     <y>384</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>decisionTreeListWidget</sender>
+   <signal>itemClicked(QListWidgetItem*)</signal>
+   <receiver>strategicListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>175</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>126</x>
+     <y>384</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>strategicListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>decisionTreeListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>384</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>126</x>
+     <y>175</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>strategicListWidget</sender>
+   <signal>itemClicked(QListWidgetItem*)</signal>
+   <receiver>decisionTreeListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>384</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>126</x>
+     <y>175</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>solutionListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>decisionTreeListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>593</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>126</x>
+     <y>175</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>solutionListWidget</sender>
+   <signal>itemClicked(QListWidgetItem*)</signal>
+   <receiver>decisionTreeListWidget</receiver>
+   <slot>clearSelection()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>593</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>126</x>
+     <y>175</y>
     </hint>
    </hints>
   </connection>

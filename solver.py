@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
-from collections import Counter
+from collections import Counter, ChainMap
+from collections.abc import Iterable
 from string import ascii_uppercase
 from heapq import nsmallest, nlargest
 from call_counter import call_counter
@@ -8,7 +9,7 @@ from wordle_game import Color
 from wordle_tree import WordleTree
 from itertools import chain, islice
 from abc import ABCMeta, abstractmethod, abstractclassmethod
-from tree_utils import read_decision_tree, routes_to_dt, dt_to_routes
+from tree_utils import read_decision_tree, routes_to_dt, dt_to_routes, read_decision_routes
 import numpy as np
 from utils import diff_indexes, load_word_list
 from or_matrix import compute_or_matrix, is_or_matrix, find_closed_components
@@ -867,12 +868,17 @@ class DecisionTreeGuessManager(AbstractGuessManager):
             candidates = [w for w in load_word_list(candidates) if len(w) == length]
         self.candidates = tuple(sorted(set(candidates)))
 
-        if isinstance(dt, (str, PosixPath)):
+        if dt is None:
+            self.dt = {}
+        elif isinstance(dt, (str, PosixPath)):
             self.dt = read_decision_tree(dt)
         elif isinstance(dt, (list, tuple)):
-            self.dt = routes_to_dt(dt)
+            if all(isinstance(item, (str, PosixPath)) for item in dt):
+                self.dt = routes_to_dt(route for path in dt for route in read_decision_routes(path))
+            else:
+                self.dt = routes_to_dt(dt)
         else:
-            self.dt = dt if dt is not None else {}
+            self.dt = dt
 
         if isinstance(cache_path, (str, PosixPath)):
             self.cache_path = cache_path
@@ -958,7 +964,7 @@ class DecisionTreeGuessManager(AbstractGuessManager):
             self._search_in_progress = False
             self._stop_event = multiprocessing.Event()
 
-        return suggestions, rem_candidates
+        return suggestions, [], rem_candidates
 
     def regenerate_tree(self):
 
@@ -972,6 +978,25 @@ class DecisionTreeGuessManager(AbstractGuessManager):
 
     def get_allowed_colors_by_slot(self, pick):
         return self.filter.get_allowed_colors_by_slot(pick)
+
+
+    def gen_routes(self, pick):
+
+        with self._stop_lock:
+            if self._search_in_progress:
+                return None
+            else:
+                self._search_in_progress = True
+        if not self.tree:
+            self.tree = WordleTree(self.candidates, self.lexicon, self.dt, cache_path=self.cache_path)
+
+        routes = self.tree.gen_routes(pick, self._stop_event)
+
+        with self._stop_lock:
+            self._search_in_progress = False
+            self._stop_event = multiprocessing.Event() # should this just be cleared instead?
+
+        return routes
 
 
 class GuessManager(AbstractGuessManager):

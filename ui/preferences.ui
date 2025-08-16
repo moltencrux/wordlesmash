@@ -16,6 +16,12 @@
   <property name="windowTitle">
    <string>Word Le SMASH! - Preferences</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true"/>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
    <property name="leftMargin">
     <number>3</number>
@@ -56,7 +62,7 @@
       <item>
        <widget class="QTabWidget" name="preferencesTabWidget">
         <property name="currentIndex">
-         <number>0</number>
+         <number>1</number>
         </property>
         <widget class="QWidget" name="mainPreferencesTab">
          <attribute name="title">
@@ -100,7 +106,7 @@
              </sizepolicy>
             </property>
             <property name="editable">
-             <bool>true</bool>
+             <bool>false</bool>
             </property>
             <item>
              <property name="text">
@@ -160,6 +166,16 @@
               </widget>
              </item>
              <item>
+              <widget class="QToolButton" name="setDefaultProfileButton">
+               <property name="text">
+                <string>...</string>
+               </property>
+               <property name="icon">
+                <iconset theme="emblem-default"/>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QToolButton" name="copyProfileButton">
                <property name="styleSheet">
                 <string notr="true">border: none</string>
@@ -211,6 +227,9 @@
             </property>
             <property name="text">
              <string>Game Type</string>
+            </property>
+            <property name="buddy">
+             <cstring>gameTypeComboBox</cstring>
             </property>
            </widget>
           </item>
@@ -295,20 +314,20 @@
                      <property name="text">
                       <string>Solution Candidates</string>
                      </property>
+                     <property name="buddy">
+                      <cstring>candidatesList</cstring>
+                     </property>
                     </widget>
                    </item>
                    <item>
-                    <spacer name="candidatesSpacer">
-                     <property name="orientation">
-                      <enum>Qt::Orientation::Horizontal</enum>
+                    <widget class="QLabel" name="candidatesCountLabel">
+                     <property name="styleSheet">
+                      <string notr="true">padding: 0 10px</string>
                      </property>
-                     <property name="sizeHint" stdset="0">
-                      <size>
-                       <width>40</width>
-                       <height>20</height>
-                      </size>
+                     <property name="text">
+                      <string>0</string>
                      </property>
-                    </spacer>
+                    </widget>
                    </item>
                    <item>
                     <widget class="QToolButton" name="addCandidateButton">
@@ -348,7 +367,7 @@
                       <string/>
                      </property>
                      <property name="icon">
-                      <iconset resource="wordlesmash.qrc">
+                      <iconset theme="accessories-text-editor" resource="wordlesmash.qrc">
                        <normaloff>:/icons/elipsis.svg</normaloff>:/icons/elipsis.svg</iconset>
                      </property>
                     </widget>
@@ -425,20 +444,20 @@
                      <property name="text">
                       <string>Allowed Picks</string>
                      </property>
+                     <property name="buddy">
+                      <cstring>picksList</cstring>
+                     </property>
                     </widget>
                    </item>
                    <item>
-                    <spacer name="picksSpacer">
-                     <property name="orientation">
-                      <enum>Qt::Orientation::Horizontal</enum>
+                    <widget class="QLabel" name="picksCountLabel">
+                     <property name="styleSheet">
+                      <string notr="true">padding: 0 10px</string>
                      </property>
-                     <property name="sizeHint" stdset="0">
-                      <size>
-                       <width>40</width>
-                       <height>20</height>
-                      </size>
+                     <property name="text">
+                      <string>0</string>
                      </property>
-                    </spacer>
+                    </widget>
                    </item>
                    <item>
                     <widget class="QToolButton" name="addPickButton">
@@ -472,7 +491,7 @@
                       <string notr="true">border: none</string>
                      </property>
                      <property name="icon">
-                      <iconset resource="wordlesmash.qrc">
+                      <iconset theme="accessories-text-editor" resource="wordlesmash.qrc">
                        <normaloff>:/icons/elipsis.svg</normaloff>:/icons/elipsis.svg</iconset>
                      </property>
                     </widget>
@@ -518,6 +537,9 @@
             </property>
             <property name="text">
              <string>Profile</string>
+            </property>
+            <property name="buddy">
+             <cstring>profileComboBox</cstring>
             </property>
            </widget>
           </item>
@@ -778,6 +800,9 @@
                    <property name="text">
                     <string>Charted Decison Trees</string>
                    </property>
+                   <property name="buddy">
+                    <cstring>decisionTreeList</cstring>
+                   </property>
                   </widget>
                  </item>
                  <item>
@@ -885,6 +910,9 @@
                    <property name="text">
                     <string>Initial Picks</string>
                    </property>
+                   <property name="buddy">
+                    <cstring>initialPicksList</cstring>
+                   </property>
                   </widget>
                  </item>
                  <item>
@@ -947,7 +975,7 @@
                     <string>...</string>
                    </property>
                    <property name="icon">
-                    <iconset theme="applications-office"/>
+                    <iconset theme="QIcon::ThemeIcon::AddressBookNew"/>
                    </property>
                   </widget>
                  </item>
@@ -1012,7 +1040,7 @@
                   </spacer>
                  </item>
                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
-                  <widget class="QToolButton" name="moveLeft">
+                  <widget class="QToolButton" name="chartTreeButton">
                    <property name="text">
                     <string>...</string>
                    </property>
@@ -1038,7 +1066,7 @@
                   </spacer>
                  </item>
                  <item alignment="Qt::AlignmentFlag::AlignHCenter">
-                  <widget class="QToolButton" name="moveRight">
+                  <widget class="QToolButton" name="removeTreeButton">
                    <property name="text">
                     <string>...</string>
                    </property>
@@ -1128,8 +1156,8 @@
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>248</x>
-     <y>600</y>
+     <x>251</x>
+     <y>663</y>
     </hint>
     <hint type="destinationlabel">
      <x>157</x>
@@ -1144,8 +1172,8 @@
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>316</x>
-     <y>600</y>
+     <x>319</x>
+     <y>663</y>
     </hint>
     <hint type="destinationlabel">
      <x>286</x>
