@@ -1,6 +1,5 @@
 <RCC>
   <qresource>
-    <file>icons/elipsis2.svg</file>
     <file>icons/open-menu-symbolic.svg</file>
     <file>icons/elipsis.svg</file>
   </qresource>
