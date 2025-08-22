@@ -672,7 +672,7 @@
                  <number>0</number>
                 </property>
                 <item>
-                 <widget class="QtWaitingSpinner" name="waitingSpinner" native="true">
+                 <widget class="WaitingArrowSpinnerWidget" name="waitingSpinner" native="true">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                     <horstretch>0</horstretch>
@@ -1139,9 +1139,9 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>QtWaitingSpinner</class>
+   <class>WaitingArrowSpinnerWidget</class>
    <extends>QWidget</extends>
-   <header>ui/QtWaitingSpinner/waitingspinnerwidget.h</header>
+   <header>ui/waitingarrowspinnerwidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

@@ -1,4 +1,3 @@
-[submodule "ui/QtWaitingSpinner"]
-	path = ui/QtWaitingSpinner
-	url = https://github.com/z3ntu/QtWaitingSpinner
-	ignore = untracked
+[submodule "ui/WaitingArrowSpinnerWidget"]
+	path = ui/WaitingArrowSpinnerWidget
+	url = https://github.com/moltencrux/WaitingArrowSpinnerWidget
