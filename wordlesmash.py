@@ -195,15 +195,9 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
         base_text = self.label.text().rstrip('. ')
         self.label.setText(base_text + next(self.last_periods))
 
-    def stopSpinner(self):
-        try:
-            self.spinner.stop()
-            logging.debug("ProgressDialog spinner stopped")
-        except AttributeError as e:
-            logging.error(f"Failed to stop ProgressDialog spinner: {e}")
 
     def onCancelRequested(self):
-        self.stopSpinner()
+        self.spinner.setDisabled(True)
         self.label.setText("Canceling routes generation ...")
         logging.debug("Cancellation requested in ProgressDialog")
         if self.cancel_callback:
@@ -222,9 +216,6 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
             return
         super().keyPressEvent(event)
 
-    # def reject(self):
-    #     logging.debug("ProgressDialog reject called, triggering onCancelRequested")
-    #     self.onCancelRequested()
 
 class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -542,7 +533,7 @@ class MainPreferences(QDialog, Ui_preferences):
         self.temp_dir = None
         self.original_profile = None
         self.is_modified = False
-        self.progress_dialog = None
+        # self.progress_dialog = None
         self.initUI()
         self.createTempProfile()
     
@@ -751,9 +742,9 @@ class MainPreferences(QDialog, Ui_preferences):
         sender = self.sender()
         # pick = sender.pick
         # success = True
-        if self.progress_dialog:
-            self.progress_dialog.close()
-            self.progress_dialog = None
+        # if self.progress_dialog:
+        #     # self.progress_dialog.close()
+        #     self.progress_dialog = None
         self.chartTreeButton.setEnabled(True)
         if success:
             parent.statusBar.showMessage(f"Decision tree generated for {pick}")
@@ -1336,15 +1327,11 @@ class MainPreferences(QDialog, Ui_preferences):
             )
             logging.debug(f"Created new DecisionTreeGuessManager for pick: {pick}")
         getter = DecisionTreeRoutesGetter(self.profile_manager, pick, self.guess_manager, self)
-        self.progress_dialog = ProgressDialog(self, cancel_callback=getter.stop)
+        progress_dialog = ProgressDialog(self, cancel_callback=getter.stop)
         getter.ready.connect(self.updateDecisionTrees)
-        # getter.ready.connect(self.progress_dialog.close)
-        # getter.ready.connect(self.progress_dialog.done)
-        # getter.finished.connect(self.progress_dialog.accept)
-        getter.finished.connect(self.progress_dialog.close)
+        getter.finished.connect(progress_dialog.close)
+        progress_dialog.show()
         getter.start()
-        # self.progress_dialog.exec()
-        self.progress_dialog.show()
 
 
 if __name__ == '__main__':
