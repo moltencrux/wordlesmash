@@ -227,16 +227,12 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.settings = QSettings()
         self.profile_manager = ProfileManager(self, self.settings)
         self.guessDisplay.setFocus()
-        print(f'{type(self.waitingSpinner) = }')
-        self.setSpinnerProperties()
         # self.guess = GuessManager(filename='default_words.txt', length=5)
         self.resetGuessManager()
         self.onWordSubmitted()
         self.guessDisplay.wordSubmitted.connect(self.onWordSubmitted)
         self.guessDisplay.wordWithdrawn.connect(self.onWordWithdrawn)
         self.resetButton.clicked.connect(self.onResetGame)
-        self.stopButton.setDisabled(True)
-        self.stopButton.clicked.connect(self.onCancelSearch)
 
 
         #self.key_ENTER.setStyleSheet("background-color: red; color: white; :disabled {background-color: gray; color: black;} :enabled {background-color: green; color: white;}")
@@ -268,10 +264,8 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
     def updateSuggestionLists(self):
         """This should be called when the suggestions are ready"""
 
-        self.waitingSpinner.stop()
         self.statusBar.showMessage('Suggestions ready!')
-        self.stopButton.setDisabled(True)
-        self.resetButton.setEnabled(True)
+        # self.resetButton.setEnabled(True)
         sender = self.sender()
 
         if isinstance(sender, SuggestionGetter):
@@ -281,6 +275,7 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         else:
             candidates = []
             logging.debug(type(sender))
+            logging.debug(f"Empty nvalid or empty routes generated for {self.pick}")
 
         if candidates:
 
@@ -300,7 +295,7 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
 
         if self.solutionListWidget.count() > 1:
             self.guessDisplay.setSubmitEnabled(True)
-            self.key_ENTER.setEnabled(True)
+            # self.key_ENTER.setEnabled(True)
 
         self.guessDisplay.setWithdrawEnabled(True)
 
@@ -321,26 +316,20 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         # Create a thread that will launch a search
         self.guessDisplay.setSubmitDisabled(True)
         self.guessDisplay.setWithdrawDisabled(True)
-        self.stopButton.setEnabled(True)
-        self.resetButton.setDisabled(True)
-        self.statusBar.showMessage('Generating picks...')
-        self.waitingSpinner.start()
-        self.key_ENTER.setDisabled(True)
-        getter = SuggestionGetter(self)
-        getter.finished.connect(self.updateSuggestionLists)
-        getter.start()
 
-    def setSpinnerProperties(self):
-        ...
-        # self.waitingSpinner.setRoundness(70)
-        # self.waitingSpinner.setMinimumTrailOpacity(15)
-        # self.waitingSpinner.setTrailFadePercentage(70)
-        # self.waitingSpinner.setNumberOfLines(12)
-        # self.waitingSpinner.setLineLength(10)
-        # self.waitingSpinner.setLineWidth(5)
-        # self.waitingSpinner.setInnerRadius(10)
-        # self.waitingSpinner.setRevolutionsPerSecond(1)
-        # self.waitingSpinner.setColor(QColorConstants.Gray)
+
+        # self.resetButton.setDisabled(True)
+        self.statusBar.showMessage('Generating picks...')
+        # self.key_ENTER.setDisabled(True)
+        getter = SuggestionGetter(self)
+
+        progress_dialog = ProgressDialog(self, cancel_callback=self.onCancelSearch)
+
+        getter.finished.connect(self.updateSuggestionLists)
+        getter.finished.connect(progress_dialog.close)
+
+        progress_dialog.show()
+        getter.start()
 
 
     @pyqtSlot()
@@ -381,15 +370,16 @@ class SuggestionGetter(QThread):
         self.picks = []
         self.strategic_picks = []
         self.candidates = []
-        self._stop_event = Event()
+        # self._stop_event = Event()
 
     def run(self):
         suggestions = self.parent().guess.get_suggestions()
         self.picks, self.strategic_picks, self.candidates = suggestions
         self.ready.emit()
 
-    def stop(self):
-        self._stop_event.set()
+    # def stop(self):
+    #     self.parent().guess.stop()
+    #     self._stop_event.set()
 
 class DecisionTreeRoutesGetter(QThread):
     ready = pyqtSignal(str, bool)
