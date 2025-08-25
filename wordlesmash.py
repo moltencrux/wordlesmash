@@ -1,15 +1,13 @@
 #!/usr/bin/env -S python3 -O
 import logging, sys, os
 from PyQt6.QtCore import (QCoreApplication, QSettings, QStandardPaths, Qt,
-    pyqtSlot, pyqtSignal, QObject, QThread, QModelIndex, QEvent
+    pyqtSlot, pyqtSignal, QObject, QThread, QModelIndex, QEvent, QTimer
 )
-
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QDialog, QListWidgetItem,
     QMessageBox, QItemDelegate, QLineEdit, QListWidget, QFormLayout, QSpinBox,
     QDialogButtonBox
 )
-                             
-from PyQt6.QtGui import QColorConstants, QValidator, QFont, QTextCursor
+from PyQt6.QtGui import QColorConstants, QValidator, QFont, QTextCursor, QCloseEvent
 from threading import Event
 from importlib.resources import files
 from pathlib import Path
@@ -19,22 +17,19 @@ import shutil
 import tempfile
 import re
 from tree_utils import routes_to_text
+from itertools import cycle
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
 QCoreApplication.setApplicationName('WordLeSmash')
 QCoreApplication.setOrganizationName('moltencrux')
-
 if __debug__:
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
     logging.debug('debug mode on')
 else:
     logging.basicConfig(stream=sys.stderr, level=logging.ERROR)
 
-
 def pathhelper(resource, package='ui'):
     return Path(files(package) / resource)
-
 
 wordlesmash_ui_path = pathhelper('WordLeSmash.ui')
 preferences_ui_path = pathhelper('preferences.ui')
@@ -50,16 +45,14 @@ progressdialog_ui_py_path = pathhelper('ProgressDialog_ui.py')
 
 wordlesmash_rc_py_path = pathhelper('wordlesmash_rc.py')
 
-
 from ui.wordlesmash_rc import qInitResources
 qInitResources()
 
-
 ui_paths = [wordlesmash_ui_path, preferences_ui_path, newprofile_ui_path,
-            batchadd_ui_path]
+            batchadd_ui_path, progressdialog_ui_path]
 
 ui_py_paths = [wordlesmash_ui_py_path, preferences_ui_py_path,
-               newprofile_ui_py_path, batchadd_ui_py_path]
+               newprofile_ui_py_path, batchadd_ui_py_path, progressdialog_ui_py_path]
 
 # if ANY .ui file is newer than any generated .py file, prefer compiling the UI.
 match all_files_newer(ui_paths, ui_py_paths):
@@ -97,9 +90,7 @@ class ProfileManager:
     def getDefaultProfile(self):
         if not self.settings.contains("default_profile"):
             self.setDefaultProfile("Basic")
-
         return self.settings.value("default_profile")
-
 
     def setCurrentProfile(self, profile):
         self.current_profile = profile
@@ -130,7 +121,7 @@ class ProfileManager:
         return word_length
 
     def getTempNamespace(self):
-            return f"temp_profiles/{self.getCurrentProfile()}"
+        return f"temp_profiles/{self.getCurrentProfile()}"
 
     def getTempDir(self, temp_path):
         return temp_path / self.getCurrentProfile()
@@ -154,11 +145,15 @@ class ProfileManager:
         # Swap directories
         current_dir = Path(self.app_data_path) / "profiles" / self.getCurrentProfile()
         temp_profile_dir = self.getTempDir(temp_dir)
-        if current_dir.exists():
-            shutil.rmtree(current_dir)
-        if temp_profile_dir.exists():
-            temp_profile_dir.rename(current_dir)
-        logging.debug(f"Swapped temp profile with current: {self.getCurrentProfile()}")
+        try:
+            if current_dir.exists():
+                shutil.rmtree(current_dir)
+            if temp_profile_dir.exists():
+                shutil.move(temp_profile_dir, current_dir)
+            logging.debug(f"Swapped temp profile with current: {self.getCurrentProfile()}")
+        except OSError as e:
+            logging.error(f"Failed to swap temp profile directory {temp_profile_dir} to {current_dir}: {e}")
+            raise
 
     def deleteTemp(self, temp_namespace, temp_dir):
         self.settings.beginGroup(temp_namespace)
@@ -167,7 +162,69 @@ class ProfileManager:
         self.settings.sync()
         temp_profile_dir = self.getTempDir(temp_dir)
         if temp_profile_dir.exists():
-            shutil.rmtree(temp_profile_dir)
+            try:
+                shutil.rmtree(temp_profile_dir)
+                logging.debug(f"Deleted temp profile directory: {temp_profile_dir}")
+            except OSError as e:
+                logging.error(f"Failed to delete temp profile directory {temp_profile_dir}: {e}")
+
+class ProgressDialog(QDialog, Ui_ProgressDialog):
+    def __init__(self, parent=None, cancel_callback=None):
+        super().__init__(parent)
+        self.cancel_callback = cancel_callback
+        self.initUI()
+        self.last_periods = cycle(("    ", " .  ", " .. ", " ...",))  # List of periods to rotate
+        self.timer = QTimer(self)  # Initialize QTimer
+        self.timer.timeout.connect(self.updateLabel)  # Connect timeout signal to updateLabel method
+        self.timer.start(400)  # Start the timer with a 500 ms interval
+
+    def initUI(self):
+        self.setupUi(self)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoTitleBarBackgroundHint)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
+        logging.debug(f"ProgressDialog window flags: {self.windowFlags()}")
+        try:
+            self.spinner.start()
+            logging.debug("ProgressDialog spinner started")
+        except AttributeError as e:
+            logging.error(f"ProgressDialog spinner not properly initialized: {e}")
+        self.cancelButton.clicked.connect(self.onCancelRequested)
+
+    def updateLabel(self):
+        # Update the label text with the current period
+        base_text = self.label.text().rstrip('. ')
+        self.label.setText(base_text + next(self.last_periods))
+
+    def stopSpinner(self):
+        try:
+            self.spinner.stop()
+            logging.debug("ProgressDialog spinner stopped")
+        except AttributeError as e:
+            logging.error(f"Failed to stop ProgressDialog spinner: {e}")
+
+    def onCancelRequested(self):
+        self.stopSpinner()
+        self.label.setText("Canceling routes generation ...")
+        logging.debug("Cancellation requested in ProgressDialog")
+        if self.cancel_callback:
+            try:
+                self.cancel_callback()
+                logging.debug("Called cancel_callback in ProgressDialog")
+            except Exception as e:
+                logging.error(f"Error executing cancel_callback: {e}")
+
+    def keyPressEvent(self, event):
+        logging.debug(f"ProgressDialog keyPressEvent: key={event.key()}, focusWidget={self.focusWidget()}, flags={self.windowFlags()}")
+        if event.key() == Qt.Key.Key_Escape:
+            logging.debug("Esc key press in ProgressDialog, triggering onCancelRequested")
+            self.onCancelRequested()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    # def reject(self):
+    #     logging.debug("ProgressDialog reject called, triggering onCancelRequested")
+    #     self.onCancelRequested()
 
 class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -179,14 +236,11 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.settings = QSettings()
         self.profile_manager = ProfileManager(self, self.settings)
         self.guessDisplay.setFocus()
-
         print(f'{type(self.waitingSpinner) = }')
         self.setSpinnerProperties()
         # self.guess = GuessManager(filename='default_words.txt', length=5)
         self.resetGuessManager()
-
         self.onWordSubmitted()
-
         self.guessDisplay.wordSubmitted.connect(self.onWordSubmitted)
         self.guessDisplay.wordWithdrawn.connect(self.onWordWithdrawn)
         self.resetButton.clicked.connect(self.onResetGame)
@@ -208,12 +262,10 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         
         self.guessDisplay.set_color_callback(self.guess.get_allowed_colors_by_slot)
 
-
         self.preferences_ui = MainPreferences(self)
         self.actionPreferences.triggered.connect(self.preferences_ui.show)
 
     def resetGuessManager(self):
-
         self.guess = DecisionTreeGuessManager(self.profile_manager.getPicks(),
                                               self.profile_manager.getCandidates(),
                                               self.profile_manager.getDecisionTrees(),
@@ -261,28 +313,20 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
 
         self.guessDisplay.setWithdrawEnabled(True)
 
-
     @pyqtSlot(str, tuple)
     def onWordSubmitted(self, word=None, colors=None):
         """Slot to handle wordSubmitted signal."""
-
         print(f"Received wordSubmitted: '{word} {colors}'")
-
         if not word or (self.guess.tree and word in self.guess.tree.word_idx):
             if word is not None:
                 self.guessDisplay.insertNewRow()
-
             self.guess.update_guess_result(word, colors)
             self.spawnSuggestionGetter()
         else:
-
             self.guessDisplay.flashRow()
             self.statusBar.showMessage('Invalid Word choice. Did you enter it correctly?')
 
-
-
     def spawnSuggestionGetter(self):
-
         # Create a thread that will launch a search
         self.guessDisplay.setSubmitDisabled(True)
         self.guessDisplay.setWithdrawDisabled(True)
@@ -294,8 +338,6 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         getter = SuggestionGetter(self)
         getter.finished.connect(self.updateSuggestionLists)
         getter.start()
-
-
 
     def setSpinnerProperties(self):
         ...
@@ -328,8 +370,6 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.guess.reset()
         self.spawnSuggestionGetter()
 
-
-
     def _on_load_finished(self):
         ...
 
@@ -354,23 +394,20 @@ class SuggestionGetter(QThread):
 
     def run(self):
         suggestions = self.parent().guess.get_suggestions()
-        # if (picks, candidates) != (None, None):
         self.picks, self.strategic_picks, self.candidates = suggestions
-        # else:
-        #     ... # None indicates search was aborted maybe, or an error
         self.ready.emit()
 
     def stop(self):
         self._stop_event.set()
 
 class DecisionTreeRoutesGetter(QThread):
-    ready = pyqtSignal(str, bool)  # Emits pick and success flag
+    ready = pyqtSignal(str, bool)
+
     def __init__(self, profile_manager, pick, guess_manager, parent=None):
         super().__init__(parent)
         self.profile_manager = profile_manager
         self.pick = pick
         self.guess_manager = guess_manager
-
         self.app_cache_path = profile_manager.app_cache_path
         self.routes = []
         self._stop_event = Event()
@@ -378,6 +415,11 @@ class DecisionTreeRoutesGetter(QThread):
     def run(self):
         try:
             self.routes = self.guess_manager.gen_routes(self.pick)
+            # Verify routes are valid
+            if self.routes is None or not self.routes:
+                logging.error(f"Invalid or empty routes generated for {self.pick}")
+                self.ready.emit(self.pick, False)
+                return
             profile_name = self.profile_manager.getCurrentProfile()
             profile_dir = Path(self.profile_manager.app_data_path) / "profiles" / profile_name
             dtree_dir = profile_dir / "dtree"
@@ -392,8 +434,7 @@ class DecisionTreeRoutesGetter(QThread):
             self.ready.emit(self.pick, False)
 
     def stop(self):
-        self._stop_event.set()
-
+        self.guess_manager.stop()
 
 class UpperCaseValidator(QValidator):
     def __init__(self, word_length, parent=None):
@@ -428,7 +469,6 @@ class NewProfileDialog(QDialog, Ui_NewProfile):
 
     def initUI(self):
         self.setupUi(self)
-
 
     def accept(self):
         if not self.nameEdit.text().strip():
@@ -502,6 +542,7 @@ class MainPreferences(QDialog, Ui_preferences):
         self.temp_dir = None
         self.original_profile = None
         self.is_modified = False
+        self.progress_dialog = None
         self.initUI()
         self.createTempProfile()
     
@@ -510,7 +551,6 @@ class MainPreferences(QDialog, Ui_preferences):
         logging.debug(f"initUI: QComboBox item count before clear: {self.profileComboBox.count()}")
         self.profileComboBox.clear()
         logging.debug(f"initUI: QComboBox item count after clear: {self.profileComboBox.count()}")
-        self.setSpinnerProperties()
         self.profileComboBox.setEditable(True)
         self.profileComboBox.lineEdit().returnPressed.connect(self.renameProfile)
         self.profileComboBox.lineEdit().installEventFilter(self)
@@ -550,25 +590,39 @@ class MainPreferences(QDialog, Ui_preferences):
         self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.onApply)
         self.loadSettings()
 
-    def setSpinnerProperties(self):
-        ...
-
-        # self.waitingSpinner.setRoundness(70)
-        # self.waitingSpinner.setMinimumTrailOpacity(15)
-        # self.waitingSpinner.setTrailFadePercentage(70)
-        # self.waitingSpinner.setNumberOfLines(12)
-        # self.waitingSpinner.setLineLength(5)
-        # self.waitingSpinner.setLineWidth(3)
-        # self.waitingSpinner.setInnerRadius(5)
-        # self.waitingSpinner.setRevolutionsPerSecond(1)
-        # self.waitingSpinner.setColor(QColorConstants.Gray)
+    def keyPressEvent(self, event):
+        logging.debug(f"MainPreferences keyPressEvent: key={event.key()}, focusWidget={self.focusWidget()}")
+        if event.key() == Qt.Key.Key_Escape:
+            logging.debug("Esc key pressed in MainPreferences, triggering closeEvent")
+            self.closeEvent(QCloseEvent())
+            return
+        super().keyPressEvent(event)
 
     def eventFilter(self, watched, event):
         if watched == self.profileComboBox.lineEdit() and event.type() == QEvent.Type.KeyPress:
+            logging.debug(f"MainPreferences eventFilter: key={event.key()}, focusWidget={self.focusWidget()}")
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self.renameProfile()
                 return True  # Consume the event to prevent dialog closure
         return super().eventFilter(watched, event)
+
+    def closeEvent(self, event):
+        logging.debug("MainPreferences closeEvent triggered")
+        if self.is_modified:
+            reply = QMessageBox.question(
+                self, "Unsaved Changes",
+                "You have unsaved changes. Apply them?",
+                QMessageBox.StandardButton.Apply | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel
+            )
+            if reply == QMessageBox.StandardButton.Apply:
+                self.onApply()
+            elif reply == QMessageBox.StandardButton.Discard:
+                self.onCancel()
+            else:
+                event.ignore()
+                return
+        self.profile_manager.deleteTemp(self.temp_namespace, self.temp_dir)
+        super().closeEvent(event)
 
     def updateCountLabels(self):
         """Update candidateCountLabel and picksCountLabel with current counts."""
@@ -621,44 +675,96 @@ class MainPreferences(QDialog, Ui_preferences):
             (dest_dir / "candidates.txt").touch()
         self.is_modified = False
 
-
     @pyqtSlot()
     def onChartTreeButtonClicked(self):
         """Generate a decision tree rule set for the selected word in initialPicksList."""
-        self.parent().guess
         selected_items = self.initialPicksList.selectedItems()
         if not selected_items:
             logging.debug("No word selected for decision tree generation")
             return
-        pick = selected_items[0].text()
+        # Check if an editor is open for the selected item
+        selected_item = selected_items[0]
+        selected_index = self.initialPicksList.indexFromItem(selected_item)
+        # Check if an editor is open and retrieve its text
+        editor_text = None
+        if self.initialPicksList.isPersistentEditorOpen(selected_item):
+            logging.debug("Editor open for selected item, retrieving text")
+            editor = self.initialPicksList.itemWidget(selected_item)
+            if isinstance(editor, QLineEdit):
+                editor_text = editor.text().strip().upper()
+                logging.debug(f"Editor text: {editor_text}")
+                # Validate editor text
+                if editor_text:
+                    if len(editor_text) != self.word_length or not editor_text.isalpha():
+                        logging.debug(f"Invalid editor text: {editor_text}")
+                        QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
+                        self.initialPicksList.closePersistentEditor(selected_item)
+                        self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
+                        self.addInitialPickButton.setEnabled(True)
+                        return
+                    legal_picks = {self.picksList.item(i).text() for i in range(self.picksList.count())}
+                    if editor_text not in legal_picks:
+                        reply = QMessageBox.question(
+                            self, "Add to Picks?",
+                            f"'{editor_text}' is not in the legal picks. Add it to picks.txt?",
+                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                        )
+                        if reply == QMessageBox.StandardButton.Yes:
+                            self.picksList.addItem(editor_text)
+                            self.savePicksToFile()
+                            self.updateCountLabels()
+                        else:
+                            logging.debug(f"User declined to add {editor_text} to picks")
+                            self.initialPicksList.closePersistentEditor(selected_item)
+                            self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
+                            self.addInitialPickButton.setEnabled(True)
+                            return
+                    # Update item text and close editor
+                    selected_item.setText(editor_text)
+                    self.initialPicksList.closePersistentEditor(selected_item)
+                    self.addInitialPickButton.setEnabled(True)
+                else:
+                    logging.debug("Editor text is empty")
+                    self.initialPicksList.closePersistentEditor(selected_item)
+                    self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
+                    self.addInitialPickButton.setEnabled(True)
+                    return
+        # Re-check selected items after closing editor
+        selected_items = self.initialPicksList.selectedItems()
+        if not selected_items:
+            logging.debug("No valid word selected after closing editor")
+            QMessageBox.warning(self, "Invalid Selection", "Please select a valid word for decision tree generation.")
+            return
+        pick = selected_items[0].text().strip()
+        if not pick:
+            logging.debug("Empty word selected for decision tree generation")
+            QMessageBox.warning(self, "Invalid Word", "The selected word is empty or invalid.")
+            return
         profile_name = self.profileComboBox.currentText().rstrip(" ✓")
         logging.debug(f"Generating decision tree for word: {pick} in profile: {profile_name}")
         self.spawnDecisionTreeRoutesGetter(pick)
-        
+
     @pyqtSlot(str, bool)
-    def updateDecisionTrees(self):
+    def updateDecisionTrees(self, pick, success):
+        """Update decisionTreeList and initialPicksList after DecisionTreeRoutesGetter finishes."""
         parent = self.parent()
-        sender = self.sender() # the getter
-        pick = sender.pick
-        success = True
-        self.waitingSpinner.stop()
-        self.stopButton.setDisabled(True)
-        try:
-            parent.stopButton.clicked.disconnect()
-        except TypeError:
-            pass  # Signal not connected
+        sender = self.sender()
+        # pick = sender.pick
+        # success = True
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
         self.chartTreeButton.setEnabled(True)
         if success:
             parent.statusBar.showMessage(f"Decision tree generated for {pick}")
             # Add to decisionTreeList if not already present
             if pick not in [self.decisionTreeList.item(i).text() for i in range(self.decisionTreeList.count())]:
                 self.decisionTreeList.addItem(pick)
-            # Remove from initialPicksList
-            for i in range(self.initialPicksList.count()):
-                if self.initialPicksList.item(i).text() == pick:
-                    self.initialPicksList.takeItem(i)
-                    break
-            self.saveSettings()  # Save updated initialPicksList
+                for i in range(self.initialPicksList.count()):
+                    if self.initialPicksList.item(i).text() == pick:
+                        self.initialPicksList.takeItem(i)
+                        break
+                self.saveSettings()
         else:
             parent.statusBar.showMessage(f"Failed to generate decision tree for {pick}")
             QMessageBox.warning(self, "Error", f"Failed to generate decision tree for '{pick}'")
@@ -689,14 +795,13 @@ class MainPreferences(QDialog, Ui_preferences):
         if word not in [self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count())]:
             self.initialPicksList.addItem(word)
             logging.debug(f"Added {word} to initialPicksList")
-            self.saveSettings()
+        self.saveSettings()
         self.onDecisionTreeListSelectionChanged()
         self.guess_manager = None
         logging.debug("Invalidated guess_manager due to decision tree removal")
         self.parent().statusBar.showMessage(f"Removed decision tree for {word}")
         self.is_modified = True
 
-        
     def loadSettings(self):
         logging.debug("Loading settings")
         self.profile_manager.settings.beginGroup("profiles")
@@ -749,6 +854,7 @@ class MainPreferences(QDialog, Ui_preferences):
             self.word_length = self.profile_manager.getWordLength()
             self.wordLengthDisplayLabel.setText(str(self.word_length))
             initial_picks = self.profile_manager.settings.value("initial_picks", "", type=str)
+            logging.debug(f"Initial picks: {initial_picks}")
             self.initialPicksList.clear()
             if initial_picks:
                 for pick in initial_picks.split("\n"):
@@ -760,6 +866,7 @@ class MainPreferences(QDialog, Ui_preferences):
             if picks_file.exists():
                 with picks_file.open("r", encoding="utf-8") as f:
                     legal_picks = [line.strip().upper() for line in f if line.strip()]
+                    logging.debug(f"Picks loaded: {legal_picks}")
                     for pick in legal_picks:
                         self.picksList.addItem(pick)
             candidates_file = self.profile_manager.getCandidates()
@@ -767,6 +874,7 @@ class MainPreferences(QDialog, Ui_preferences):
             if candidates_file.exists():
                 with candidates_file.open("r", encoding="utf-8") as f:
                     candidates = [line.strip().upper() for line in f if line.strip()]
+                    logging.debug(f"Candidates loaded: {candidates}")
                     for candidate in candidates:
                         self.candidatesList.addItem(candidate)
             dtree_dir = Path(self.profile_manager.app_data_path) / "profiles" / profile_name / "dtree"
@@ -807,7 +915,6 @@ class MainPreferences(QDialog, Ui_preferences):
         delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
         self.candidatesList.setItemDelegate(delegate_candidates)
 
-
     @pyqtSlot()
     def renameProfile(self):
         current_index = self.profileComboBox.currentIndex()
@@ -837,7 +944,7 @@ class MainPreferences(QDialog, Ui_preferences):
         new_dir = self.temp_dir / new_name
         if old_dir.exists():
             old_dir.rename(new_dir)
-            self.profile_manager.setCurrentProfile(new_name)
+        self.profile_manager.setCurrentProfile(new_name)
         if self.profile_manager.getDefaultProfile() == old_name:
             self.profile_manager.setDefaultProfile(new_name)
         self.original_profile = new_name
@@ -891,11 +998,8 @@ class MainPreferences(QDialog, Ui_preferences):
         finally:
             self.profileComboBox.currentTextChanged.connect(self.loadProfileSettings)
         self.loadProfileSettings(new_profile)
-        self.createTempProfile()  # Update temp profile for new current profile
+        self.createTempProfile()
         self.is_modified = True
-
-
-
 
     @pyqtSlot(QListWidgetItem)
     def validateInitialPick(self, item):
@@ -920,7 +1024,6 @@ class MainPreferences(QDialog, Ui_preferences):
             else:
                 self.initialPicksList.takeItem(self.initialPicksList.row(item))
                 return
-
 
     @pyqtSlot(QListWidgetItem)
     def validatePick(self, item):
@@ -1018,30 +1121,12 @@ class MainPreferences(QDialog, Ui_preferences):
         self.parent().statusBar.showMessage(f"Changes discarded for profile {self.original_profile}")
         self.reject()
 
-
-    def closeEvent(self, event):
-        if self.is_modified:
-            reply = QMessageBox.question(
-                self, "Unsaved Changes",
-                "You have unsaved changes. Apply them?",
-                QMessageBox.StandardButton.Apply | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel
-            )
-            if reply == QMessageBox.StandardButton.Apply:
-                self.onApply()
-            elif reply == QMessageBox.StandardButton.Discard:
-                self.onCancel()
-            else:
-                event.ignore()
-                return
-        self.profile_manager.deleteTemp(self.temp_namespace, self.temp_dir)
-        super().closeEvent(event)
         
     @pyqtSlot()
     def addPick(self):
         """Add a new item to picksList and enter edit mode."""
         new_item = QListWidgetItem("")
         new_item.setFlags(new_item.flags() | Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable)
-        
         self.addPickButton.setDisabled(True)
         profile = self.profile_manager.getCurrentProfile()
         self.picksList.addItem(new_item)
@@ -1054,7 +1139,6 @@ class MainPreferences(QDialog, Ui_preferences):
             logging.error(f"Failed to enter edit mode for picksList: {e}")
         self.updateCountLabels()
         self.is_modified = True
-
 
     @pyqtSlot()
     def addCandidate(self):
@@ -1072,7 +1156,6 @@ class MainPreferences(QDialog, Ui_preferences):
             logging.error(f"Failed to enter edit mode for candidatesList: {e}")
         self.updateCountLabels()
         self.is_modified = True
-
 
     @pyqtSlot()
     def removeInitialPick(self):
@@ -1111,7 +1194,6 @@ class MainPreferences(QDialog, Ui_preferences):
             self.guess_manager = None
             self.is_modified = True
 
-
     @pyqtSlot()
     def addProfile(self):
         dialog = NewProfileDialog(self)
@@ -1145,7 +1227,7 @@ class MainPreferences(QDialog, Ui_preferences):
             finally:
                 self.profileComboBox.currentTextChanged.connect(self.loadProfileSettings)
             self.loadProfileSettings(name)
-            self.createTempProfile()  # Update temp profile for new profile
+            self.createTempProfile()
             self.is_modified = True
 
     @pyqtSlot()
@@ -1192,10 +1274,9 @@ class MainPreferences(QDialog, Ui_preferences):
         finally:
             self.profileComboBox.currentTextChanged.connect(self.loadProfileSettings)
         self.loadProfileSettings(new_name)
-        self.createTempProfile()  # Update temp profile for new current profile
+        self.createTempProfile()
         self.parent().statusBar.showMessage(f"Copied profile {source_profile} to {new_name}")
         self.is_modified = True
-
 
     @pyqtSlot()
     def saveSettings(self):
@@ -1238,15 +1319,13 @@ class MainPreferences(QDialog, Ui_preferences):
 
 
     def spawnDecisionTreeRoutesGetter(self, pick):
+        """Start a DecisionTreeRoutesGetter thread to generate a decision tree for the given pick."""
         parent = self.parent()
-
         parent.statusBar.showMessage(f"Generating decision tree for {pick}...")
 
         # Create a thread that will launch a search
         self.chartTreeButton.setDisabled(True)
         # self.statusBar.showMessage('Generating picks...')
-        self.waitingSpinner.start()
-
         # Create guess_manager if None or outdated
         if self.guess_manager is None:
             self.guess_manager = DecisionTreeGuessManager(
@@ -1257,10 +1336,15 @@ class MainPreferences(QDialog, Ui_preferences):
             )
             logging.debug(f"Created new DecisionTreeGuessManager for pick: {pick}")
         getter = DecisionTreeRoutesGetter(self.profile_manager, pick, self.guess_manager, self)
-        self.stopButton.clicked.connect(getter.stop)
-        self.stopButton.setEnabled(True)
+        self.progress_dialog = ProgressDialog(self, cancel_callback=getter.stop)
         getter.ready.connect(self.updateDecisionTrees)
+        # getter.ready.connect(self.progress_dialog.close)
+        # getter.ready.connect(self.progress_dialog.done)
+        # getter.finished.connect(self.progress_dialog.accept)
+        getter.finished.connect(self.progress_dialog.close)
         getter.start()
+        # self.progress_dialog.exec()
+        self.progress_dialog.show()
 
 
 if __name__ == '__main__':

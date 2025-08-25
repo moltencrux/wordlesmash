@@ -1,5 +1,6 @@
 <RCC>
   <qresource>
+    <file>icons/cancel-button.svg</file>
     <file>icons/open-menu-symbolic.svg</file>
     <file>icons/elipsis.svg</file>
   </qresource>

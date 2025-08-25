@@ -1534,7 +1534,7 @@
   <customwidget>
    <class>WaitingArrowSpinnerWidget</class>
    <extends>QWidget</extends>
-   <header>ui/waitingarrowspinnerwidget.h</header>
+   <header>ui/WaitingArrowSpinnerWidget/waitingarrowspinnerwidget.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>
