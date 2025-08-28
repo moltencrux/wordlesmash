@@ -32,6 +32,7 @@ from multiprocessing import Event, get_context, Manager, Process
 from sortedcontainers import SortedDict
 from math import inf
 import threading
+from pathlib import Path
 
 
 class CompoundEvent:
@@ -286,7 +287,7 @@ class WordleTree():
         else:
             self.branch_rules = SortedDict(branch_rules) # these were the default paramaters
 
-        filename = os.sep.join([cache_path, self.gen_matrix_filename()])
+        filename = Path(cache_path) / self.gen_matrix_filename()
 
         try:
             self.clue_matrix = np.load(filename)
