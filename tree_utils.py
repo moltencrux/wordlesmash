@@ -229,26 +229,28 @@ def dt_to_routes(root):
 
     return routes
 
-def dt_to_text(graph, start):
+def dt_to_text(tree):
 
-    # Create a stack for the nodes to visit
-    stack = [start]
-    # Create a set to keep track of visited nodes
-    # visited = set()
+    return routes_to_text(dt_to_routes(tree))
 
-    while stack:
-        # Pop a node from the stack
-        node = stack.pop()
-        # if node not in visited:
+    # # Create a stack for the nodes to visit
+    # stack = [start]
+    # # Create a set to keep track of visited nodes
+    # # visited = set()
 
-        # Mark the node as visited
-        # visited.add(node)
-        print(node)  # Process the node (e.g., print it)
+    # while stack:
+    #     # Pop a node from the stack
+    #     node = stack.pop()
+    #     # if node not in visited:
 
-        # Add all unvisited neighbors to the stack
-        for neighbor in graph[node]:
-            if neighbor not in visited:
-                stack.append(neighbor)
+    #     # Mark the node as visited
+    #     # visited.add(node)
+    #     print(node)  # Process the node (e.g., print it)
+
+    #     # Add all unvisited neighbors to the stack
+    #     for neighbor in graph[node]:
+    #         if neighbor not in visited:
+    #             stack.append(neighbor)
 
 def dt_bf_level_profile(dt):
     profile = []

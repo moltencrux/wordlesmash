@@ -5,9 +5,12 @@ from PyQt6.QtCore import (QCoreApplication, QSettings, QStandardPaths, Qt,
 )
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QDialog, QListWidgetItem,
     QMessageBox, QItemDelegate, QLineEdit, QListWidget, QFormLayout, QSpinBox,
-    QDialogButtonBox
+    QDialogButtonBox, QComboBox
 )
-from PyQt6.QtGui import QColorConstants, QValidator, QFont, QTextCursor, QCloseEvent
+from PyQt6.QtGui import (QColorConstants, QValidator, QFont, QTextCursor,
+    QCloseEvent, QIcon
+)
+
 from threading import Event
 from importlib.resources import files
 from pathlib import Path
@@ -16,8 +19,11 @@ from solver import GuessManager, Color, DecisionTreeGuessManager
 import shutil
 import tempfile
 import re
-from tree_utils import routes_to_text
+from tree_utils import routes_to_text, routes_to_dt, read_decision_routes, dt_to_text
 from itertools import cycle
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Dict, List, Optional
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 QCoreApplication.setApplicationName('WordLeSmash')
@@ -60,7 +66,6 @@ match all_files_newer(ui_paths, ui_py_paths):
     case True:
         logging.debug('importing ui files')
         from PyQt6 import uic
-        # Ui_MainWindow, _ = uic.loadUiType(wordlesmash_ui_path, from_imports=True, import_from='ui')
         Ui_MainWindow, _ = uic.loadUiType(wordlesmash_ui_path)
         Ui_preferences, _ = uic.loadUiType(preferences_ui_path)
         Ui_NewProfile, _ = uic.loadUiType(newprofile_ui_path)
@@ -77,36 +82,59 @@ match all_files_newer(ui_paths, ui_py_paths):
         logging.critical('UI imports unavailable, exiting...')
         sys.exit(-1)
 
+class GameType(Enum):
+    WORDLE = "wordle"
+    NYT_NORMAL = "NYT - Normal Mode"
+    OTHER = "other"
+
+@dataclass
+class Profile:
+    word_length: int = 5
+    dt: Dict[str, str] = field(default_factory=dict)  # {pick: path to dtree/<pick>.txt}
+    game_type: GameType = GameType.WORDLE
+    candidates: List[str] = field(default_factory=list)
+    picks: List[str] = field(default_factory=list)
+    initial_picks: List[str] = field(default_factory=list)  # {pick: status}
+    original_name: Optional[str] = None
+    dirty: bool = False
+
 class ProfileManager:
     def __init__(self, parent=None, settings=None):
         self.settings = settings if settings is not None else QSettings()
-        self.app_data_path = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
-        self.app_cache_path = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation)
+        self.app_data_path = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation))
+        self._app_cache_path = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation))
         self.current_profile = self.getDefaultProfile()
+        self.modified: Dict[str, Profile] = {}
+        self.loaded: Dict[str, Profile] = {}
+        self.to_delete: List[str] = []  # Track profiles to delete on OK/Apply
 
-    def getCurrentProfile(self):
+    def getCurrentProfile(self) -> Optional[str]:
         return self.current_profile
 
-    def getDefaultProfile(self):
-        if not self.settings.contains("default_profile"):
-            self.setDefaultProfile("Basic")
-        return self.settings.value("default_profile")
+    def setCurrentProfile(self, name: str):
+        self.current_profile = name
+        logging.debug(f"Set current profile: {name}")
 
-    def setCurrentProfile(self, profile):
-        self.current_profile = profile
+    def getDefaultProfile(self) -> Optional[str]:
+        return self.settings.value("default_profile", defaultValue=None)
 
-    def setDefaultProfile(self, profile):
-        self.settings.setValue("default_profile", profile)
+    def setDefaultProfile(self, name: str):
+        self.settings.setValue("default_profile", name)
+        self.settings.sync()
 
-    def getPicks(self):
-        profile = self.getCurrentProfile()
-        picks_file = Path(self.app_data_path) / "profiles" / profile / "picks.txt"
-        return picks_file
+    def getProfileNames(self) -> List[str]:
+        self.settings.beginGroup("profiles")
+        names = self.settings.childGroups()
+        self.settings.endGroup()
+        return names
 
-    def getCandidates(self):
-        profile = self.getCurrentProfile()
-        candidates_file = Path(self.app_data_path) / "profiles" / profile / "candidates.txt"
-        return candidates_file
+    def getPicks(self) -> List[str]:
+        profile = self.loadProfile(self.current_profile)
+        return profile.picks
+
+    def getCandidates(self) -> List[str]:
+        profile = self.loadProfile(self.current_profile)
+        return profile.candidates
 
     def getDecisionTrees(self):
         profile = self.getCurrentProfile()
@@ -114,59 +142,121 @@ class ProfileManager:
         dtree_dir = profile_dir / "dtree"
         return tuple(dtree_dir.glob("*.txt"))
 
-    def getWordLength(self):
-        self.settings.beginGroup(f"profiles/{self.getCurrentProfile()}")
-        word_length = self.settings.value("word_length", 5, type=int)
-        self.settings.endGroup()
-        return word_length
+    def getWordLength(self) -> int:
+        profile = self.loadProfile(self.current_profile)
+        return profile.word_length
 
-    def getTempNamespace(self):
-        return f"temp_profiles/{self.getCurrentProfile()}"
+    def app_cache_path(self) -> str:
+        return str(self._app_cache_path)
 
-    def getTempDir(self, temp_path):
-        return temp_path / self.getCurrentProfile()
+    def loadProfile(self, name: str) -> Profile:
+        if name in self.modified:
+            logging.debug(f"Loading modified profile: {name}, picks: {self.modified[name].picks}, candidates: {self.modified[name].candidates}")
+            return self.modified[name]
+        if name in self.loaded:
+            return self.loaded[name]
+        profile = Profile()
+        self.settings.beginGroup(f"profiles/{name}")
+        profile.word_length = int(self.settings.value("word_length", 5))
+        profile.game_type = GameType(self.settings.value("game_type", GameType.WORDLE.value))
+        # Handle initial_picks as list or dict (for backward compatibility)
+        initial_picks = self.settings.value("initial_picks", [], type=list)
+        if isinstance(initial_picks, dict):
+            profile.initial_picks = list(initial_picks.keys())  # Convert dict to list
+        else:
+            profile.initial_picks = [pick for pick in initial_picks if pick]
+        profile.dt = {}
+        profile_dir = self.app_data_path / "profiles" / name
+        # Load picks from picks.txt
+        picks_file = profile_dir / "picks.txt"
+        profile.picks = []
+        if picks_file.exists():
+            with picks_file.open("r", encoding="utf-8") as f:
+                profile.picks = [line.strip().upper() for line in f if line.strip()]
+        # Load candidates from candidates.txt
+        candidates_file = profile_dir / "candidates.txt"
+        profile.candidates = []
+        if candidates_file.exists():
+            with candidates_file.open("r", encoding="utf-8") as f:
+                profile.candidates = [line.strip().upper() for line in f if line.strip()]
+        # Load decision trees
+        if profile_dir.exists():
+            dtree_dir = profile_dir / "dtree"
+            if dtree_dir.exists():
+                dt_files = dtree_dir.glob("*.txt")
+                profile.dt = routes_to_dt(route for file in dt_files for route in
+                    read_decision_routes(file)
+                )
+        self.settings.endGroup()
+        self.loaded[name] = profile
+        return profile
 
-    def swapWithTemp(self, temp_namespace, temp_dir):
-        # Swap QSettings
-        self.settings.beginGroup(temp_namespace)
-        keys = self.settings.allKeys()
-        values = [self.settings.value(key) for key in keys]
-        self.settings.endGroup()
-        current_group = f"profiles/{self.getCurrentProfile()}"
-        self.settings.beginGroup(current_group)
-        self.settings.remove("")
-        for key, value in zip(keys, values):
-            self.settings.setValue(key, value)
-        self.settings.endGroup()
-        self.settings.beginGroup("temp_profiles")
-        self.settings.remove(self.getCurrentProfile())
+    def saveProfile(self, name: str, profile: Profile):
+        self.settings.beginGroup(f"profiles/{name}")
+        self.settings.setValue("word_length", profile.word_length)
+        self.settings.setValue("game_type", profile.game_type.value)
+        self.settings.setValue("initial_picks", profile.initial_picks)  # Save as list
         self.settings.endGroup()
         self.settings.sync()
-        # Swap directories
-        current_dir = Path(self.app_data_path) / "profiles" / self.getCurrentProfile()
-        temp_profile_dir = self.getTempDir(temp_dir)
-        try:
-            if current_dir.exists():
-                shutil.rmtree(current_dir)
-            if temp_profile_dir.exists():
-                shutil.move(temp_profile_dir, current_dir)
-            logging.debug(f"Swapped temp profile with current: {self.getCurrentProfile()}")
-        except OSError as e:
-            logging.error(f"Failed to swap temp profile directory {temp_profile_dir} to {current_dir}: {e}")
-            raise
+        profile_dir = self.app_data_path / "profiles" / name
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        # Save picks to picks.txt
+        with open(profile_dir / "picks.txt", "w", encoding="utf-8") as f:
+            f.write("\n".join(profile.picks))
+        # Save candidates to candidates.txt
+        with open(profile_dir / "candidates.txt", "w", encoding="utf-8") as f:
+            f.write("\n".join(profile.candidates))
+        logging.debug(f"Saved profile: {name}, initial_picks: {profile.initial_picks}, picks: {profile.picks}, candidates: {profile.candidates}")
+        dtree_dir = profile_dir / "dtree"
+        dtree_dir.mkdir(parents=True, exist_ok=True)
+        for word, subtree in profile.dt.items():
+            with open(dtree_dir / f"{word}.txt", "w", encoding="utf-8") as f:
+                f.write(dt_to_text({word: subtree}))
 
-    def deleteTemp(self, temp_namespace, temp_dir):
-        self.settings.beginGroup(temp_namespace)
-        self.settings.remove("")
-        self.settings.endGroup()
-        self.settings.sync()
-        temp_profile_dir = self.getTempDir(temp_dir)
-        if temp_profile_dir.exists():
-            try:
-                shutil.rmtree(temp_profile_dir)
-                logging.debug(f"Deleted temp profile directory: {temp_profile_dir}")
-            except OSError as e:
-                logging.error(f"Failed to delete temp profile directory {temp_profile_dir}: {e}")
+    def deleteProfile(self, name: str):
+        # Mark profile for deletion instead of immediate removal
+        if name not in self.to_delete:
+            self.to_delete.append(name)
+            logging.debug(f"Marked profile {name} for deletion")
+        if name == self.current_profile:
+            self.current_profile = None
+        if name == self.getDefaultProfile():
+            self.setDefaultProfile(None)
+
+    def processDeletions(self):
+        # Process all marked deletions
+        for name in self.to_delete:
+            logging.debug(f"Processing deletion for profile {name}")
+            self.settings.beginGroup("profiles")
+            self.settings.remove(name)
+            self.settings.endGroup()
+            self.settings.sync()
+            profile_dir = self.app_data_path / "profiles" / name
+            if profile_dir.exists():
+                shutil.rmtree(profile_dir)
+            if name in self.modified:
+                del self.modified[name]
+            if name in self.loaded:
+                del self.loaded[name]
+        self.to_delete.clear()
+        logging.debug("All marked profiles deleted")
+
+    def modifyProfile(self, name: str, original_name: Optional[str] = None) -> Profile:
+        logging.debug(f"modifyProfile called for name: {name}, original_name: {original_name}")
+        if name in self.modified:
+            profile = self.modified[name]
+            logging.debug(f"Returning existing modified profile: {name}")
+        else:
+            if name in self.loaded:
+                profile = self.loaded.pop(name)
+                logging.debug(f"Popped profile from loaded: {name}")
+            else:
+                profile = self.loadProfile(name) if original_name else Profile()
+                logging.debug(f"Created new profile for: {name}")
+            profile.original_name = original_name if original_name else name
+            profile.dirty = True
+            self.modified[name] = profile
+        return profile
 
 class ProgressDialog(QDialog, Ui_ProgressDialog):
     def __init__(self, parent=None, cancel_callback=None):
@@ -194,7 +284,6 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
         # Update the label text with the current period
         base_text = self.label.text().rstrip('. ')
         self.label.setText(base_text + next(self.last_periods))
-
 
     def onCancelRequested(self):
         self.spinner.setDisabled(True)
@@ -227,7 +316,6 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.settings = QSettings()
         self.profile_manager = ProfileManager(self, self.settings)
         self.guessDisplay.setFocus()
-        # self.guess = GuessManager(filename='default_words.txt', length=5)
         self.resetGuessManager()
         self.onWordSubmitted()
         self.guessDisplay.wordSubmitted.connect(self.onWordSubmitted)
@@ -253,12 +341,13 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.actionPreferences.triggered.connect(self.preferences_ui.show)
 
     def resetGuessManager(self):
-        self.guess = DecisionTreeGuessManager(self.profile_manager.getPicks(),
-                                              self.profile_manager.getCandidates(),
-                                              self.profile_manager.getDecisionTrees(),
-                                              length=self.profile_manager.getWordLength(),
-                                              cache_path=self.profile_manager.app_cache_path)
-
+        self.guess = DecisionTreeGuessManager(
+            self.profile_manager.getPicks(),
+            self.profile_manager.getCandidates(),
+            self.profile_manager.getDecisionTrees(),
+            length=self.profile_manager.getWordLength(),
+            cache_path=self.profile_manager.app_cache_path()
+        )
 
     @pyqtSlot()
     def updateSuggestionLists(self):
@@ -275,24 +364,18 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         else:
             candidates = []
             logging.debug(type(sender))
-            logging.debug(f"Empty nvalid or empty routes generated for {self.pick}")
-
+            logging.debug("Empty or invalid routes generated")
         if candidates:
-
             self.decisionTreeListWidget.clear()
             for s in picks:
                 self.decisionTreeListWidget.addItem(s)
-
             self.strategicListWidget.clear()
             for c in sorted([]):
                 self.strategicListWidget.addItem(c)
-
             self.solutionListWidget.clear()
             for c in sorted(candidates):
                 self.solutionListWidget.addItem(c)
-
             self.solutionCountLabel.setText(f'({len(candidates)})')
-
         if self.solutionListWidget.count() > 1:
             self.guessDisplay.setSubmitEnabled(True)
             # self.key_ENTER.setEnabled(True)
@@ -389,7 +472,7 @@ class DecisionTreeRoutesGetter(QThread):
         self.profile_manager = profile_manager
         self.pick = pick
         self.guess_manager = guess_manager
-        self.app_cache_path = profile_manager.app_cache_path
+        self.app_cache_path = profile_manager.app_cache_path()
         self.routes = []
         self._stop_event = Event()
 
@@ -493,49 +576,47 @@ class BatchAddDialog(QDialog, Ui_BatchAdd):
         words = [word.strip().upper() for word in text.split("\n") if word.strip()]
         parent = self.parent()
         if words and hasattr(parent, 'picksList') and self in (parent.managePicksDialog, parent.manageCandidatesDialog):
+            profile = parent.profile_manager.modifyProfile(parent.profile_manager.getCurrentProfile())
             target_list = parent.picksList if self is parent.managePicksDialog else parent.candidatesList
             target_list.clear()
             if self is parent.manageCandidatesDialog:
-                # Add valid words to picksList to maintain candidates ⊆ picks
-                legal_picks = [parent.picksList.item(i).text() for i in range(parent.picksList.count())]
+                legal_picks = set(profile.picks)
                 for word in words:
                     if len(word) == parent.word_length and word.isalpha() and word not in legal_picks:
                         parent.picksList.addItem(word)
-                parent.savePicksToFile()
+                        profile.picks.append(word)
+                        profile.dirty = True
             for word in words:
                 if len(word) == parent.word_length and word.isalpha():
                     target_list.addItem(word)
+                    if self is parent.managePicksDialog and word not in profile.picks:
+                        profile.picks.append(word)
+                        profile.dirty = True
+                    elif self is parent.manageCandidatesDialog and word not in profile.candidates:
+                        profile.candidates.append(word)
+                        profile.dirty = True
             parent.updateCountLabels()
-            if self is parent.managePicksDialog:
-                parent.savePicksToFile()
-            elif self is parent.manageCandidatesDialog:
-                parent.saveSettings()
+            parent.is_modified = True
         super().accept()
 
 class MainPreferences(QDialog, Ui_preferences):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.profile_manager = parent.profile_manager
-        self.word_length = 5  # Default word length
-        self._loading_settings = False
+        self.word_length = 5
         self.guess_manager = None
-        self.temp_namespace = None
-        self.temp_dir = None
-        self.original_profile = None
         self.is_modified = False
-        # self.progress_dialog = None
+        self.default_icon = QIcon.fromTheme("emblem-default", QIcon())  # Fallback to empty icon
         self.initUI()
-        self.createTempProfile()
-    
+        self.loadSettings()
+
     def initUI(self):
         self.setupUi(self)
         logging.debug(f"initUI: QComboBox item count before clear: {self.profileComboBox.count()}")
         self.profileComboBox.clear()
         logging.debug(f"initUI: QComboBox item count after clear: {self.profileComboBox.count()}")
         self.profileComboBox.setEditable(True)
-        self.profileComboBox.lineEdit().returnPressed.connect(self.renameProfile)
-        self.profileComboBox.lineEdit().installEventFilter(self)
-        self.profileComboBox.currentTextChanged.connect(self.loadProfileSettings)
+        self.profileComboBox.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.addInitialPickButton.clicked.connect(self.addInitialPick)
         self.addPickButton.clicked.connect(self.addPick)
         self.addCandidateButton.clicked.connect(self.addCandidate)
@@ -564,12 +645,13 @@ class MainPreferences(QDialog, Ui_preferences):
         self.chartTreeButton.setEnabled(False)
         self.removeTreeButton.setEnabled(False)
         self.initialPicksList.itemSelectionChanged.connect(self.onInitialPicksListSelectionChanged)
-        # self.decisionTreeList.itemSelectionChanged.connect(self.onDecisionTreeListSelectionChanged)
         self.chartTreeButton.clicked.connect(self.onChartTreeButtonClicked)
         self.buttonBox.accepted.connect(self.onOK)
         self.buttonBox.rejected.connect(self.onCancel)
         self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.onApply)
-        self.loadSettings()
+        # Disable default button to prevent Enter key from accepting dialog
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setAutoDefault(False)
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setAutoDefault(False)
 
     def keyPressEvent(self, event):
         logging.debug(f"MainPreferences keyPressEvent: key={event.key()}, focusWidget={self.focusWidget()}")
@@ -577,15 +659,32 @@ class MainPreferences(QDialog, Ui_preferences):
             logging.debug("Esc key pressed in MainPreferences, triggering closeEvent")
             self.closeEvent(QCloseEvent())
             return
+        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if self.profileComboBox.hasFocus() or self.profileComboBox.lineEdit().hasFocus():
+                self.renameProfile()
+                event.accept()  # Consume the Enter key event
+                return
         super().keyPressEvent(event)
 
-    def eventFilter(self, watched, event):
-        if watched == self.profileComboBox.lineEdit() and event.type() == QEvent.Type.KeyPress:
-            logging.debug(f"MainPreferences eventFilter: key={event.key()}, focusWidget={self.focusWidget()}")
+    def getCurrentModifiedProfile(self) -> Profile:
+        """Get or create the current profile in modified, ensuring correct profile is updated."""
+        current_index = self.profileComboBox.currentIndex()
+        if current_index < 0:
+            logging.debug("No profile selected for modification")
+            raise ValueError("No profile selected")
+        name = self.profileComboBox.itemData(current_index, Qt.ItemDataRole.UserRole)
+        if not name:
+            logging.debug("No valid profile name for modification")
+            raise ValueError("Invalid profile name")
+        logging.debug(f"Getting modified profile for: {name}")
+        return self.profile_manager.modifyProfile(name)
+
+    def eventFilter(self, obj, event):
+        if obj == self.profileComboBox.lineEdit() and event.type() == QEvent.Type.KeyPress:
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self.renameProfile()
-                return True  # Consume the event to prevent dialog closure
-        return super().eventFilter(watched, event)
+                return True  # Consume the Enter key event
+        return super().eventFilter(obj, event)
 
     def closeEvent(self, event):
         logging.debug("MainPreferences closeEvent triggered")
@@ -602,7 +701,6 @@ class MainPreferences(QDialog, Ui_preferences):
             else:
                 event.ignore()
                 return
-        self.profile_manager.deleteTemp(self.temp_namespace, self.temp_dir)
         super().closeEvent(event)
 
     def updateCountLabels(self):
@@ -615,7 +713,7 @@ class MainPreferences(QDialog, Ui_preferences):
 
     def getUniqueProfileName(self, base_name):
         """Generate a unique profile name by appending (N) if necessary."""
-        profiles = [self.profileComboBox.itemText(i).rstrip(" ✓") for i in range(self.profileComboBox.count())]
+        profiles = [self.profileComboBox.itemData(i, Qt.ItemDataRole.UserRole) for i in range(self.profileComboBox.count())]
         if base_name not in profiles:
             return base_name
         i = 1
@@ -629,32 +727,6 @@ class MainPreferences(QDialog, Ui_preferences):
         has_selection = len(self.initialPicksList.selectedItems()) > 0
         self.chartTreeButton.setEnabled(has_selection)
         logging.debug(f"chartTreeButton enabled: {has_selection}")
-
-    def createTempProfile(self):
-        self.original_profile = self.profile_manager.getCurrentProfile()
-        self.temp_namespace = f"temp_profiles/{self.original_profile}"
-        self.temp_dir = Path(tempfile.mkdtemp(prefix=f"wordle_{self.original_profile}_"))
-        logging.debug(f"Creating temp profile: {self.temp_namespace}, dir: {self.temp_dir}")
-        # Copy QSettings to temp_profiles/<profile>
-        self.profile_manager.settings.beginGroup(f"profiles/{self.original_profile}")
-        keys = self.profile_manager.settings.allKeys()
-        values = [self.profile_manager.settings.value(key) for key in keys]
-        self.profile_manager.settings.endGroup()
-        self.profile_manager.settings.beginGroup(self.temp_namespace)
-        for key, value in zip(keys, values):
-            self.profile_manager.settings.setValue(key, value)
-        self.profile_manager.settings.endGroup()
-        self.profile_manager.settings.sync()
-        # Copy files to temp directory
-        source_dir = Path(self.profile_manager.app_data_path) / "profiles" / self.original_profile
-        dest_dir = self.temp_dir / self.original_profile
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        if source_dir.exists():
-            shutil.copytree(source_dir, dest_dir, dirs_exist_ok=True)
-        else:
-            (dest_dir / "picks.txt").touch()
-            (dest_dir / "candidates.txt").touch()
-        self.is_modified = False
 
     @pyqtSlot()
     def onChartTreeButtonClicked(self):
@@ -674,54 +746,47 @@ class MainPreferences(QDialog, Ui_preferences):
             if isinstance(editor, QLineEdit):
                 editor_text = editor.text().strip().upper()
                 logging.debug(f"Editor text: {editor_text}")
-                # Validate editor text
-                if editor_text:
-                    if len(editor_text) != self.word_length or not editor_text.isalpha():
-                        logging.debug(f"Invalid editor text: {editor_text}")
-                        QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
-                        self.initialPicksList.closePersistentEditor(selected_item)
-                        self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
-                        self.addInitialPickButton.setEnabled(True)
-                        return
-                    legal_picks = {self.picksList.item(i).text() for i in range(self.picksList.count())}
-                    if editor_text not in legal_picks:
-                        reply = QMessageBox.question(
-                            self, "Add to Picks?",
-                            f"'{editor_text}' is not in the legal picks. Add it to picks.txt?",
-                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                        )
-                        if reply == QMessageBox.StandardButton.Yes:
-                            self.picksList.addItem(editor_text)
-                            self.savePicksToFile()
-                            self.updateCountLabels()
-                        else:
-                            logging.debug(f"User declined to add {editor_text} to picks")
-                            self.initialPicksList.closePersistentEditor(selected_item)
-                            self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
-                            self.addInitialPickButton.setEnabled(True)
-                            return
-                    # Update item text and close editor
-                    selected_item.setText(editor_text)
-                    self.initialPicksList.closePersistentEditor(selected_item)
-                    self.addInitialPickButton.setEnabled(True)
+        if editor_text:
+            if len(editor_text) != self.word_length or not editor_text.isalpha():
+                logging.debug(f"Invalid editor text: {editor_text}")
+                QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
+                self.initialPicksList.closePersistentEditor(selected_item)
+                self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
+                self.addInitialPickButton.setEnabled(True)
+                return
+            legal_picks = {self.picksList.item(i).text() for i in range(self.picksList.count())}
+            if editor_text not in legal_picks:
+                reply = QMessageBox.question(
+                    self, "Add to Picks?",
+                    f"'{editor_text}' is not in the legal picks. Add it to picks.txt?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.picksList.addItem(editor_text)
+                    profile = self.profile_manager.modifyProfile(self.profile_manager.getCurrentProfile())
+                    profile.picks.append(editor_text)
+                    profile.dirty = True
+                    self.updateCountLabels()
                 else:
-                    logging.debug("Editor text is empty")
+                    logging.debug(f"User declined to add {editor_text} to picks")
                     self.initialPicksList.closePersistentEditor(selected_item)
                     self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
                     self.addInitialPickButton.setEnabled(True)
                     return
-        # Re-check selected items after closing editor
+            selected_item.setText(f"{editor_text} (active)")
+            self.initialPicksList.closePersistentEditor(selected_item)
+            self.addInitialPickButton.setEnabled(True)
         selected_items = self.initialPicksList.selectedItems()
         if not selected_items:
             logging.debug("No valid word selected after closing editor")
             QMessageBox.warning(self, "Invalid Selection", "Please select a valid word for decision tree generation.")
             return
-        pick = selected_items[0].text().strip()
+        pick = selected_items[0].text().split(" (")[0].strip()
         if not pick:
             logging.debug("Empty word selected for decision tree generation")
             QMessageBox.warning(self, "Invalid Word", "The selected word is empty or invalid.")
             return
-        profile_name = self.profileComboBox.currentText().rstrip(" ✓")
+        profile_name = self.profileComboBox.itemData(self.profileComboBox.currentIndex(), Qt.ItemDataRole.UserRole)
         logging.debug(f"Generating decision tree for word: {pick} in profile: {profile_name}")
         self.spawnDecisionTreeRoutesGetter(pick)
 
@@ -729,23 +794,17 @@ class MainPreferences(QDialog, Ui_preferences):
     def updateDecisionTrees(self, pick, success):
         """Update decisionTreeList and initialPicksList after DecisionTreeRoutesGetter finishes."""
         parent = self.parent()
-        sender = self.sender()
-        # pick = sender.pick
-        # success = True
-        # if self.progress_dialog:
-        #     # self.progress_dialog.close()
-        #     self.progress_dialog = None
         self.chartTreeButton.setEnabled(True)
         if success:
             parent.statusBar.showMessage(f"Decision tree generated for {pick}")
             # Add to decisionTreeList if not already present
             if pick not in [self.decisionTreeList.item(i).text() for i in range(self.decisionTreeList.count())]:
                 self.decisionTreeList.addItem(pick)
-                for i in range(self.initialPicksList.count()):
-                    if self.initialPicksList.item(i).text() == pick:
-                        self.initialPicksList.takeItem(i)
-                        break
-                self.saveSettings()
+            for i in range(self.initialPicksList.count()):
+                if self.initialPicksList.item(i).text().startswith(f"{pick} ("):
+                    self.initialPicksList.takeItem(i)
+                    break
+            self.saveSettings()
         else:
             parent.statusBar.showMessage(f"Failed to generate decision tree for {pick}")
             QMessageBox.warning(self, "Error", f"Failed to generate decision tree for '{pick}'")
@@ -758,132 +817,107 @@ class MainPreferences(QDialog, Ui_preferences):
             QMessageBox.warning(self, "No Selection", "Please select a decision tree to remove.")
             return
         word = selected_items[0].text()
-        profile = self.profile_manager.getCurrentProfile()
-        logging.debug(f"Removing decision tree for {word} in profile {profile} (temp)")
-        dtree_dir = self.temp_dir / profile / "dtree"
+        profile_name = self.profile_manager.getCurrentProfile()
+        profile = self.profile_manager.modifyProfile(profile_name, profile_name)
+        dtree_dir = self.profile_manager.app_data_path / "profiles" / profile_name / "dtree"
         tree_file = dtree_dir / f"{word}.txt"
         if tree_file.exists():
             try:
                 tree_file.unlink()
                 logging.debug(f"Deleted decision tree file: {tree_file}")
+                if word in profile.dt:
+                    del profile.dt[word]
+                    profile.dirty = True
             except OSError as e:
                 logging.error(f"Failed to delete decision tree file {tree_file}: {e}")
                 QMessageBox.critical(self, "Error", f"Failed to delete decision tree for '{word}'.")
                 return
         # Remove from decisionTreeList
         self.decisionTreeList.takeItem(self.decisionTreeList.currentRow())
-        # Add word to initialPicksList if not present
-        if word not in [self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count())]:
-            self.initialPicksList.addItem(word)
-            logging.debug(f"Added {word} to initialPicksList")
-        self.saveSettings()
-        self.onDecisionTreeListSelectionChanged()
+        if word not in [self.initialPicksList.item(i).text().split(" (")[0] for i in range(self.initialPicksList.count())]:
+            self.initialPicksList.addItem(f"{word} (active)")
+            profile.initial_picks[word] = "active"
+            profile.dirty = True
+        self.is_modified = True
         self.guess_manager = None
         logging.debug("Invalidated guess_manager due to decision tree removal")
         self.parent().statusBar.showMessage(f"Removed decision tree for {word}")
-        self.is_modified = True
 
     def loadSettings(self):
-        logging.debug("Loading settings")
-        self.profile_manager.settings.beginGroup("profiles")
-        profiles = self.profile_manager.settings.childGroups()
-        self.profile_manager.settings.endGroup()
         self.profileComboBox.clear()
-        if not profiles:
-            profiles = ["Basic"]
         default_profile = self.profile_manager.getDefaultProfile()
-        logging.debug(f"Profiles: {profiles}, Default: {default_profile}")
-        # Disconnect signals to prevent spurious triggers
-        try:
-            self.profileComboBox.currentTextChanged.disconnect(self.loadProfileSettings)
-        except TypeError:
-            pass  # Signal not connected
-        try:
-            for profile in profiles:
-                display_text = f"{profile} ✓" if profile == default_profile else profile
-                self.profileComboBox.addItem(display_text, userData=profile)
-                logging.debug(f"Added profile {profile} to QComboBox at index {self.profileComboBox.count() - 1}")
-            index = self.profileComboBox.findData(default_profile, Qt.ItemDataRole.UserRole)
+        profile_names = self.profile_manager.getProfileNames()
+        for name in profile_names:
+            self.profileComboBox.addItem(name, userData=name)
+            index = self.profileComboBox.count() - 1
+            if name == default_profile:
+                self.profileComboBox.setItemIcon(index, self.default_icon)
+            else:
+                self.profileComboBox.setItemIcon(index, QIcon())
+        current_profile = self.profile_manager.getCurrentProfile()
+        if current_profile:
+            index = self.profileComboBox.findData(current_profile, Qt.ItemDataRole.UserRole)
             if index >= 0:
                 self.profileComboBox.setCurrentIndex(index)
             else:
                 self.profileComboBox.setCurrentIndex(0)
-            selected_profile = self.profileComboBox.itemData(self.profileComboBox.currentIndex(), Qt.ItemDataRole.UserRole)
-            self.profile_manager.setCurrentProfile(selected_profile)
-        finally:
-            # Reconnect signals
-            self.profileComboBox.currentTextChanged.connect(self.loadProfileSettings)
-        self.loadProfileSettings()
+                self.profile_manager.setCurrentProfile(profile_names[0] if profile_names else None)
+        else:
+            if profile_names:
+                self.profileComboBox.setCurrentIndex(0)
+                self.profile_manager.setCurrentProfile(profile_names[0])
+        self.loadProfileSettings(self.profileComboBox.currentIndex())
+        self.profileComboBox.activated.connect(self.loadProfileSettings)
+        logging.debug(f"loadSettings completed, profileComboBox items: {self.profileComboBox.count()}")
 
-    @pyqtSlot(str)
-    def loadProfileSettings(self, profile_name=None):
-        if self._loading_settings:
-            logging.debug(f"Skipping loadProfileSettings for {profile_name} due to recursive call")
+    @pyqtSlot(int)
+    def loadProfileSettings(self, index: int):
+        if index < 0:
             return
-        self._loading_settings = True
-        try:
-            if profile_name is None:
-                profile_name = self.profileComboBox.itemData(self.profileComboBox.currentIndex(), Qt.ItemDataRole.UserRole)
-            if not profile_name:
-                profile_name = "Basic"
-            logging.debug(f"Loading profile settings for {profile_name}")
-            # Sync ProfileManager with combo box selection
-            self.profile_manager.setCurrentProfile(profile_name)
-            self.profile_manager.settings.beginGroup(f"profiles/{profile_name}")
-            game_type = self.profile_manager.settings.value("game_type", "wordle", type=str)
-            self.gameTypeComboBox.setCurrentText(game_type)
-            self.word_length = self.profile_manager.getWordLength()
-            self.wordLengthDisplayLabel.setText(str(self.word_length))
-            initial_picks = self.profile_manager.settings.value("initial_picks", "", type=str)
-            logging.debug(f"Initial picks: {initial_picks}")
-            self.initialPicksList.clear()
-            if initial_picks:
-                for pick in initial_picks.split("\n"):
-                    if pick.strip():
-                        self.initialPicksList.addItem(pick.strip().upper())
-            self.profile_manager.settings.endGroup()
-            picks_file = self.profile_manager.getPicks()
-            self.picksList.clear()
-            if picks_file.exists():
-                with picks_file.open("r", encoding="utf-8") as f:
-                    legal_picks = [line.strip().upper() for line in f if line.strip()]
-                    logging.debug(f"Picks loaded: {legal_picks}")
-                    for pick in legal_picks:
-                        self.picksList.addItem(pick)
-            candidates_file = self.profile_manager.getCandidates()
-            self.candidatesList.clear()
-            if candidates_file.exists():
-                with candidates_file.open("r", encoding="utf-8") as f:
-                    candidates = [line.strip().upper() for line in f if line.strip()]
-                    logging.debug(f"Candidates loaded: {candidates}")
-                    for candidate in candidates:
-                        self.candidatesList.addItem(candidate)
-            dtree_dir = Path(self.profile_manager.app_data_path) / "profiles" / profile_name / "dtree"
-            self.decisionTreeList.clear()
-            if dtree_dir.exists():
-                for file_path in dtree_dir.glob("*.txt"):
-                    self.decisionTreeList.addItem(file_path.stem)
-            self.updateCountLabels()
-            self.updateDelegates()
-            # Update chartTreeButton state after loading initialPicksList
-            self.onInitialPicksListSelectionChanged()
-            # self.onDecisionTreeListSelectionChanged()
-            # Invalidate guess_manager on profile switch
-            self.guess_manager = None
-            logging.debug(f"Cleared guess_manager on profile switch to {profile_name}")
-        finally:
-            self._loading_settings = False
+        name = self.profileComboBox.itemData(index, Qt.ItemDataRole.UserRole)
+        if not name:
+            logging.debug(f"No valid profile name at index {index}")
+            return
+        logging.debug(f"Loading profile settings for: {name}")
+        self.profile_manager.setCurrentProfile(name)  # Ensure current_profile is updated
+        profile = self.profile_manager.loadProfile(name)
+        self.word_length = profile.word_length
+        self.initialPicksList.clear()
+        for pick in profile.initial_picks:
+            item = QListWidgetItem(pick)
+            self.initialPicksList.addItem(item)
+        self.picksList.clear()
+        for pick in profile.picks:
+            item = QListWidgetItem(pick)
+            self.picksList.addItem(item)
+        self.candidatesList.clear()
+        for candidate in profile.candidates:
+            item = QListWidgetItem(candidate)
+            self.candidatesList.addItem(item)
+        self.decisionTreeList.clear()
+        for pick in profile.dt:
+            self.decisionTreeList.addItem(pick)
+        self.updateDelegates()
+        self.updateCountLabels()
+        self.is_modified = profile.dirty
+        self.picksList.repaint()
+        self.candidatesList.repaint()
+        # self.profileComboBox.repaint()  # Ensure combo box is refreshed
+        logging.debug(f"Loaded profile settings: {name}, initial_picks: {profile.initial_picks}, picks: {profile.picks}, candidates: {profile.candidates}, word_length: {self.word_length}")
+        logging.debug(f"ComboBox state: items={self.profileComboBox.count()}, currentIndex={self.profileComboBox.currentIndex()}, currentText={self.profileComboBox.currentText()}")
 
     @pyqtSlot()
     def onApply(self):
-        self.profile_manager.swapWithTemp(self.temp_namespace, self.temp_dir)
-        self.temp_namespace = f"temp_profiles/{self.original_profile}"
-        self.temp_dir = Path(tempfile.mkdtemp(prefix=f"wordle_{self.original_profile}_"))
-        self.createTempProfile()
-        self.loadProfileSettings(self.original_profile)
-        self.guess_manager = None
+        logging.debug("onApply called")
+        self.profile_manager.processDeletions()  # Process pending deletions first
+        for name, profile in self.profile_manager.modified.items():
+            if profile.dirty:
+                logging.debug(f"Saving profile: {name}, initial_picks: {profile.initial_picks}, picks: {profile.picks}, candidates: {profile.candidates}")
+                self.profile_manager.saveProfile(name, profile)
+        self.profile_manager.modified.clear()
         self.is_modified = False
-        self.parent().statusBar.showMessage(f"Changes applied for profile {self.original_profile}")
+        self.parent().resetGuessManager()
+        self.parent().spawnSuggestionGetter()
 
     def updateDelegates(self):
         delegate_initial = UpperCaseDelegate(self.word_length, self.initialPicksList)
@@ -898,45 +932,53 @@ class MainPreferences(QDialog, Ui_preferences):
 
     @pyqtSlot()
     def renameProfile(self):
+        logging.debug("renameProfile called")
         current_index = self.profileComboBox.currentIndex()
         if current_index < 0:
+            logging.debug("No profile selected for renaming")
             return
         old_name = self.profileComboBox.itemData(current_index, Qt.ItemDataRole.UserRole)
         new_name = self.profileComboBox.lineEdit().text().strip()
-        if new_name == old_name or not new_name:
+        if not new_name or new_name == old_name:
+            logging.debug(f"Invalid or unchanged new name: '{new_name}'")
             self.profileComboBox.lineEdit().clear()
+            logging.debug(f"Invalid or unchanged new name: {new_name}")
             return
         # Generate unique name if conflict
         new_name = self.getUniqueProfileName(new_name)
         logging.debug(f"Renaming profile from {old_name} to {new_name}")
-        self.profile_manager.settings.beginGroup(self.temp_namespace)
-        keys = self.profile_manager.settings.allKeys()
-        values = [self.profile_manager.settings.value(key) for key in keys]
-        self.profile_manager.settings.endGroup()
-        self.profile_manager.settings.beginGroup(f"temp_profiles/{new_name}")
-        for key, value in zip(keys, values):
-            self.profile_manager.settings.setValue(key, value)
-        self.profile_manager.settings.endGroup()
-        self.profile_manager.settings.beginGroup("temp_profiles")
-        self.profile_manager.settings.remove(old_name)
-        self.profile_manager.settings.endGroup()
-        self.profile_manager.settings.sync()
-        old_dir = self.temp_dir / old_name
-        new_dir = self.temp_dir / new_name
-        if old_dir.exists():
-            old_dir.rename(new_dir)
-        self.profile_manager.setCurrentProfile(new_name)
-        if self.profile_manager.getDefaultProfile() == old_name:
-            self.profile_manager.setDefaultProfile(new_name)
-        self.original_profile = new_name
-        self.temp_namespace = f"temp_profiles/{new_name}"
-        default_profile = self.profile_manager.getDefaultProfile()
-        display_text = f"{new_name} ✓" if new_name == default_profile else new_name
-        self.profileComboBox.setItemText(current_index, display_text)
-        self.profileComboBox.setItemData(current_index, new_name, Qt.ItemDataRole.UserRole)
-        logging.debug(f"Renamed profile to {new_name}, reloading settings")
-        self.profileComboBox.lineEdit().clear()
-        self.loadProfileSettings(new_name)
+        # Disconnect currentTextChanged to prevent loadProfileSettings
+        try:
+            self.profileComboBox.activated.disconnect(self.loadProfileSettings)
+        except TypeError:
+            pass
+        try:
+            # Move profile to modified with new name, preserving data
+            if old_name in self.profile_manager.modified:
+                profile = self.profile_manager.modified.pop(old_name)
+            else:
+                profile = self.profile_manager.loadProfile(old_name)
+            profile.dirty = True
+            profile.original_name = old_name
+            self.profile_manager.modified[new_name] = profile
+            self.profile_manager.setCurrentProfile(new_name)
+            was_default = old_name == self.profile_manager.getDefaultProfile()
+            if was_default:
+                self.profile_manager.setDefaultProfile(new_name)
+            self.profileComboBox.setItemText(current_index, new_name)
+            self.profileComboBox.setItemData(current_index, new_name, Qt.ItemDataRole.UserRole)
+            self.profileComboBox.setItemIcon(current_index, self.default_icon if was_default else QIcon())
+            self.profileComboBox.setCurrentIndex(current_index)  # Explicitly set current index
+            logging.debug(f"Renamed profile to {new_name}, currentIndex={current_index}")
+            # Clear line edit and restore focus to combo box
+            self.profileComboBox.lineEdit().setText(new_name)  # Set to new name to avoid blank display
+            self.profileComboBox.setFocus()
+            # Trigger UI update
+            self.loadProfileSettings(current_index)
+            # self.profileComboBox.repaint()  # Force combo box refresh
+            logging.debug(f"ComboBox state after rename: items={self.profileComboBox.count()}, currentIndex={self.profileComboBox.currentIndex()}, currentText={self.profileComboBox.currentText()}")
+        finally:
+            self.profileComboBox.activated.connect(self.loadProfileSettings)
         self.is_modified = True
 
     @pyqtSlot()
@@ -956,14 +998,9 @@ class MainPreferences(QDialog, Ui_preferences):
         if reply == QMessageBox.StandardButton.No:
             return
         logging.debug(f"Removing profile {profile}")
-        self.profile_manager.settings.beginGroup("profiles")
-        self.profile_manager.settings.remove(profile)
-        self.profile_manager.settings.endGroup()
-        profile_dir = Path(self.profile_manager.app_data_path) / "profiles" / profile
-        if profile_dir.exists():
-            shutil.rmtree(profile_dir)
+        self.profile_manager.deleteProfile(profile)
         try:
-            self.profileComboBox.currentTextChanged.disconnect(self.loadProfileSettings)
+            self.profileComboBox.activated.disconnect(self.loadProfileSettings)
         except TypeError:
             pass
         try:
@@ -976,35 +1013,48 @@ class MainPreferences(QDialog, Ui_preferences):
                 self.profileComboBox.setCurrentIndex(0)
             new_profile = self.profileComboBox.itemData(self.profileComboBox.currentIndex(), Qt.ItemDataRole.UserRole)
             self.profile_manager.setCurrentProfile(new_profile)
+            # Update icons for remaining profiles
+            for i in range(self.profileComboBox.count()):
+                name = self.profileComboBox.itemData(i, Qt.ItemDataRole.UserRole)
+                self.profileComboBox.setItemIcon(i, self.default_icon if name == default_profile else QIcon())
         finally:
-            self.profileComboBox.currentTextChanged.connect(self.loadProfileSettings)
-        self.loadProfileSettings(new_profile)
-        self.createTempProfile()
+            self.profileComboBox.activated.connect(self.loadProfileSettings)
+        self.loadProfileSettings(self.profileComboBox.currentIndex())
+        # self.profileComboBox.repaint()  # Ensure combo box is refreshed
         self.is_modified = True
+
 
     @pyqtSlot(QListWidgetItem)
     def validateInitialPick(self, item):
-        """Validate and normalize the initial pick."""
-        text = item.text().strip().upper()
+        text = item.text().split(" (")[0].strip().upper()
         if not text:
-            # self.initialPicksList.takeItem(self.initialPicksList.row(item))  # Remove unchanged placeholder
-            pass
+            self.initialPicksList.takeItem(self.initialPicksList.row(item))
             return
-        item.setText(text)
+        profile = self.profile_manager.modifyProfile(self.profile_manager.getCurrentProfile())
         if len(text) != self.word_length or not text.isalpha():
             QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
             self.initialPicksList.takeItem(self.initialPicksList.row(item))
             return
         legal_picks = {self.picksList.item(i).text() for i in range(self.picksList.count())}
         if text not in legal_picks:
-            reply = QMessageBox.question(self, "Add to Picks?", f"'{text}' is not in the legal picks. Add it to picks.txt?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            reply = QMessageBox.question(
+                self, "Add to Picks?",
+                f"'{text}' is not in the legal picks. Add it to picks.txt?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
             if reply == QMessageBox.StandardButton.Yes:
                 self.picksList.addItem(text)
-                self.savePicksToFile()
+                profile.picks.append(text)
+                profile.dirty = True
                 self.updateCountLabels()
             else:
                 self.initialPicksList.takeItem(self.initialPicksList.row(item))
                 return
+        item.setText(f"{text} (active)")
+        if text not in profile.initial_picks:
+            profile.initial_picks[text] = "active"
+            profile.dirty = True
+        self.is_modified = True
 
     @pyqtSlot(QListWidgetItem)
     def validatePick(self, item):
@@ -1014,12 +1064,17 @@ class MainPreferences(QDialog, Ui_preferences):
             self.picksList.takeItem(self.picksList.row(item))
             self.updateCountLabels()
             return
+        profile = self.profile_manager.modifyProfile(self.profile_manager.getCurrentProfile())
         item.setText(text)
         if len(text) != self.word_length or not text.isalpha():
             QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
             self.picksList.takeItem(self.picksList.row(item))
             self.updateCountLabels()
             return
+        if text not in profile.picks:
+            profile.picks.append(text)
+            profile.dirty = True
+        self.is_modified = True
 
     @pyqtSlot(QListWidgetItem)
     def validateCandidate(self, item):
@@ -1029,47 +1084,45 @@ class MainPreferences(QDialog, Ui_preferences):
             self.candidatesList.takeItem(self.candidatesList.row(item))
             self.updateCountLabels()
             return
+        profile = self.profile_manager.modifyProfile(self.profile_manager.getCurrentProfile())
         item.setText(text)
         if len(text) != self.word_length or not text.isalpha():
             QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
             self.candidatesList.takeItem(self.candidatesList.row(item))
             self.updateCountLabels()
             return
-        legal_picks = [self.picksList.item(i).text() for i in range(self.picksList.count())]
+        legal_picks = {self.picksList.item(i).text() for i in range(self.picksList.count())}
         if text not in legal_picks:
             self.picksList.addItem(text)
-            self.savePicksToFile()
+            profile.picks.append(text)
+            profile.dirty = True
             self.updateCountLabels()
+        if text not in profile.candidates:
+            profile.candidates.append(text)
+            profile.dirty = True
+        self.is_modified = True
 
     @pyqtSlot()
     def removePick(self):
-        current_row = self.picksList.currentRow()
-        if current_row >= 0:
-            profile = self.profile_manager.getCurrentProfile()
-            word = self.picksList.item(current_row).text()
-            self.picksList.takeItem(current_row)
-            # Remove from candidatesList to maintain candidates ⊆ picks
-            for i in range(self.candidatesList.count()):
-                if self.candidatesList.item(i).text() == word:
-                    self.candidatesList.takeItem(i)
-                    break
-            self.savePicksToFile()
-            self.updateCountLabels()
-            self.guess_manager = None
-            self.is_modified = True
+        profile = self.getCurrentModifiedProfile()
+        current_item = self.picksList.currentItem()
+        if current_item:
+            text = current_item.text()
+            if text in profile.picks:
+                profile.picks.remove(text)
+                profile.dirty = True
+                self.picksList.takeItem(self.picksList.currentRow())
+                self.is_modified = True
+                logging.debug(f"Removed pick {text} from profile {self.profile_manager.getCurrentProfile()}")
+
 
     @pyqtSlot()
     def savePicksToFile(self):
-        profile_name = self.profileComboBox.itemData(self.profileComboBox.currentIndex(), Qt.ItemDataRole.UserRole)
-        profile_dir = self.temp_dir / profile_name
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        picks_file = profile_dir / "picks.txt"
-        legal_picks = [self.picksList.item(i).text() for i in range(self.picksList.count())]
-        with picks_file.open("w", encoding="utf-8") as f:
-            for pick in legal_picks:
-                if pick.strip():
-                    f.write(pick + "\n")
-        logging.debug(f"Saved picks to {picks_file}")
+        profile_name = self.profile_manager.getCurrentProfile()
+        profile = self.profile_manager.modifyProfile(profile_name)
+        profile.picks = [self.picksList.item(i).text() for i in range(self.picksList.count())]
+        profile.dirty = True
+        self.is_modified = True
 
     @pyqtSlot()
     def addInitialPick(self):
@@ -1090,19 +1143,18 @@ class MainPreferences(QDialog, Ui_preferences):
 
     @pyqtSlot()
     def onOK(self):
+        logging.debug("onOK called")
         self.onApply()
         self.accept()
 
     @pyqtSlot()
     def onCancel(self):
-        self.profile_manager.deleteTemp(self.temp_namespace, self.temp_dir)
-        self.loadProfileSettings(self.original_profile)
-        self.guess_manager = None
+        logging.debug("onCancel called")
+        self.profile_manager.modified.clear()
+        self.profile_manager.to_delete.clear()  # Clear pending deletions
         self.is_modified = False
-        self.parent().statusBar.showMessage(f"Changes discarded for profile {self.original_profile}")
         self.reject()
 
-        
     @pyqtSlot()
     def addPick(self):
         """Add a new item to picksList and enter edit mode."""
@@ -1140,40 +1192,46 @@ class MainPreferences(QDialog, Ui_preferences):
 
     @pyqtSlot()
     def removeInitialPick(self):
-        current_row = self.initialPicksList.currentRow()
-        if current_row >= 0:
-            profile = self.profile_manager.getCurrentProfile()
-            self.initialPicksList.takeItem(current_row)
-            self.saveSettings()
-            self.is_modified = True
+        profile = self.getCurrentModifiedProfile()
+        current_item = self.initialPicksList.currentItem()
+        if current_item:
+            text = current_item.text()
+            if text in profile.initial_picks:
+                profile.initial_picks.remove(text)
+                profile.dirty = True
+                self.initialPicksList.takeItem(self.initialPicksList.currentRow())
+                self.is_modified = True
+                logging.debug(f"Removed initial pick {text} from profile {self.profile_manager.getCurrentProfile()}")
 
     @pyqtSlot()
     def setDefaultProfile(self):
-        profile_name = self.profileComboBox.itemData(self.profileComboBox.currentIndex(), Qt.ItemDataRole.UserRole)
+        current_index = self.profileComboBox.currentIndex()
+        if current_index < 0:
+            return
+        profile_name = self.profileComboBox.itemData(current_index, Qt.ItemDataRole.UserRole)
         if profile_name == self.profile_manager.getDefaultProfile():
             logging.debug(f"Profile {profile_name} is already default, skipping")
             return
-        self.profile_manager.settings.beginGroup(self.temp_namespace)
-        self.profile_manager.settings.setValue("default", profile_name)
-        self.profile_manager.settings.endGroup()
         self.profile_manager.setDefaultProfile(profile_name)
         for i in range(self.profileComboBox.count()):
-            profile = self.profileComboBox.itemData(i, Qt.ItemDataRole.UserRole)
-            display_text = f"{profile} ✓" if profile == profile_name else profile
-            self.profileComboBox.setItemText(i, display_text)
+            name = self.profileComboBox.itemData(i, Qt.ItemDataRole.UserRole)
+            self.profileComboBox.setItemIcon(i, self.default_icon if name == profile_name else QIcon())
         self.parent().statusBar.showMessage(f"Set {profile_name} as default profile")
+        # self.profileComboBox.repaint()  # Ensure combo box is refreshed
         self.is_modified = True
 
     @pyqtSlot()
     def removeCandidate(self):
-        current_row = self.candidatesList.currentRow()
-        if current_row >= 0:
-            profile = self.profile_manager.getCurrentProfile()
-            self.candidatesList.takeItem(current_row)
-            self.saveSettings()
-            self.updateCountLabels()
-            self.guess_manager = None
-            self.is_modified = True
+        profile = self.getCurrentModifiedProfile()
+        current_item = self.candidatesList.currentItem()
+        if current_item:
+            text = current_item.text()
+            if text in profile.candidates:
+                profile.candidates.remove(text)
+                profile.dirty = True
+                self.candidatesList.takeItem(self.candidatesList.currentRow())
+                self.is_modified = True
+                logging.debug(f"Removed candidate {text} from profile {self.profile_manager.getCurrentProfile()}")
 
     @pyqtSlot()
     def addProfile(self):
@@ -1183,32 +1241,23 @@ class MainPreferences(QDialog, Ui_preferences):
             name = self.getUniqueProfileName(name)
             length = dialog.lengthSpinBox.value()
             logging.debug(f"Adding new profile: {name}")
-            self.profile_manager.settings.beginGroup(f"profiles/{name}")
-            self.profile_manager.settings.setValue("word_length", length)
-            self.profile_manager.settings.setValue("game_type", "wordle")
-            self.profile_manager.settings.setValue("initial_picks", "")
-            self.profile_manager.settings.endGroup()
-            profile_dir = Path(self.profile_manager.app_data_path) / "profiles" / name
-            profile_dir.mkdir(parents=True, exist_ok=True)
-            # Create default picks and candidates files
-            picks_file = profile_dir / "picks.txt"
-            picks_file.touch()
-            candidates_file = profile_dir / "candidates.txt"
-            candidates_file.touch()
-            default_profile = self.profile_manager.getDefaultProfile()
+            profile = Profile(word_length=length, game_type=GameType.WORDLE, dirty=True)
+            self.profile_manager.modified[name] = profile
+            self.profile_manager.setCurrentProfile(name)
             try:
-                self.profileComboBox.currentTextChanged.disconnect(self.loadProfileSettings)
+                self.profileComboBox.activated.disconnect(self.loadProfileSettings)
             except TypeError:
                 pass
             try:
-                display_text = f"{name} ✓" if name == default_profile else name
-                self.profileComboBox.addItem(display_text, userData=name)
-                self.profileComboBox.setCurrentIndex(self.profileComboBox.count() - 1)
-                self.profile_manager.setCurrentProfile(name)
+                self.profileComboBox.addItem(name, userData=name)
+                index = self.profileComboBox.count() - 1
+                self.profileComboBox.setCurrentIndex(index)
+                default_profile = self.profile_manager.getDefaultProfile()
+                self.profileComboBox.setItemIcon(index, self.default_icon if name == default_profile else QIcon())
             finally:
-                self.profileComboBox.currentTextChanged.connect(self.loadProfileSettings)
-            self.loadProfileSettings(name)
-            self.createTempProfile()
+                self.profileComboBox.activated.connect(self.loadProfileSettings)
+            self.loadProfileSettings(self.profileComboBox.currentIndex())
+            # self.profileComboBox.repaint()  # Ensure combo box is refreshed
             self.is_modified = True
 
     @pyqtSlot()
@@ -1221,54 +1270,41 @@ class MainPreferences(QDialog, Ui_preferences):
         source_profile = self.profileComboBox.itemData(current_index, Qt.ItemDataRole.UserRole)
         new_name = self.getUniqueProfileName(f"Copy of {source_profile}")
         logging.debug(f"Copying profile {source_profile} to {new_name}")
-        # Copy QSettings group
-        self.profile_manager.settings.beginGroup(f"profiles/{source_profile}")
-        keys = self.profile_manager.settings.allKeys()
-        values = [self.profile_manager.settings.value(key) for key in keys]
-        self.profile_manager.settings.endGroup()
-        self.profile_manager.settings.beginGroup(f"profiles/{new_name}")
-        for key, value in zip(keys, values):
-            self.profile_manager.settings.setValue(key, value)
-        self.profile_manager.settings.endGroup()
-        self.profile_manager.settings.sync()
-        # Copy profile directory
-        source_dir = Path(self.profile_manager.app_data_path) / "profiles" / source_profile
-        dest_dir = Path(self.profile_manager.app_data_path) / "profiles" / new_name
-        if source_dir.exists():
-            shutil.copytree(source_dir, dest_dir)
-        else:
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            (dest_dir / "picks.txt").touch()
-            (dest_dir / "candidates.txt").touch()
-        # Update profileComboBox
-        default_profile = self.profile_manager.getDefaultProfile()
+        profile = self.profile_manager.loadProfile(source_profile)
+        profile.dirty = True
+        self.profile_manager.modified[new_name] = profile
+        self.profile_manager.setCurrentProfile(new_name)
         try:
-            self.profileComboBox.currentTextChanged.disconnect(self.loadProfileSettings)
+            self.profileComboBox.activated.disconnect(self.loadProfileSettings)
         except TypeError:
             pass
         try:
-            display_text = f"{new_name} ✓" if new_name == default_profile else new_name
-            self.profileComboBox.addItem(display_text, userData=new_name)
-            self.profileComboBox.setCurrentIndex(self.profileComboBox.count() - 1)
-            logging.debug(f"Added copied profile {new_name} to QComboBox at index {self.profileComboBox.count() - 1}")
-            self.profile_manager.setCurrentProfile(new_name)
+            self.profileComboBox.addItem(new_name, userData=new_name)
+            index = self.profileComboBox.count() - 1
+            self.profileComboBox.setCurrentIndex(index)
+            default_profile = self.profile_manager.getDefaultProfile()
+            self.profileComboBox.setItemIcon(index, self.default_icon if new_name == default_profile else QIcon())
+            logging.debug(f"Added copied profile {new_name} to QComboBox at index {index}")
         finally:
-            self.profileComboBox.currentTextChanged.connect(self.loadProfileSettings)
-        self.loadProfileSettings(new_name)
-        self.createTempProfile()
+            self.profileComboBox.activated.connect(self.loadProfileSettings)
+        self.loadProfileSettings(self.profileComboBox.currentIndex())
+        # self.profileComboBox.repaint()  # Ensure combo box is refreshed
         self.parent().statusBar.showMessage(f"Copied profile {source_profile} to {new_name}")
         self.is_modified = True
 
     @pyqtSlot()
     def saveSettings(self):
-        profile_name = self.profileComboBox.itemData(self.profileComboBox.currentIndex(), Qt.ItemDataRole.UserRole)
-        self.profile_manager.settings.beginGroup(self.temp_namespace)
-        self.profile_manager.settings.setValue("word_length", self.word_length)
-        self.profile_manager.settings.setValue("game_type", "wordle")
-        initial_picks = [self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count())]
-        self.profile_manager.settings.setValue("initial_picks", "\n".join(initial_picks))
-        self.profile_manager.settings.endGroup()
-        self.profile_manager.settings.sync()
+        profile_name = self.profile_manager.getCurrentProfile()
+        profile = self.profile_manager.modifyProfile(profile_name)
+        profile.picks = [self.picksList.item(i).text() for i in range(self.picksList.count())]
+        profile.candidates = [self.candidatesList.item(i).text() for i in range(self.candidatesList.count())]
+        profile.initial_picks = {
+            self.initialPicksList.item(i).text().split(" (")[0]: "active"
+            for i in range(self.initialPicksList.count())
+        }
+        profile.word_length = self.word_length
+        profile.dirty = True
+        self.is_modified = True
 
     @pyqtSlot("QWidget*", QItemDelegate.EndEditHint)
     def onCloseInitPicksEditor(self, editor, hint):
@@ -1306,14 +1342,14 @@ class MainPreferences(QDialog, Ui_preferences):
 
         # Create a thread that will launch a search
         self.chartTreeButton.setDisabled(True)
-        # self.statusBar.showMessage('Generating picks...')
-        # Create guess_manager if None or outdated
         if self.guess_manager is None:
+            current_profile = self.profile_manager.getCurrentProfile()
+            profile = self.profile_manager.loadProfile(current_profile)
             self.guess_manager = DecisionTreeGuessManager(
-                self.profile_manager.getPicks(),
-                self.profile_manager.getCandidates(),
-                length=self.profile_manager.getWordLength(),
-                cache_path=self.profile_manager.app_cache_path
+                profile.picks,
+                profile.candidates,
+                length=profile.word_length,
+                cache_path=self.profile_manager.app_cache_path()
             )
             logging.debug(f"Created new DecisionTreeGuessManager for pick: {pick}")
         getter = DecisionTreeRoutesGetter(self.profile_manager, pick, self.guess_manager, self)
