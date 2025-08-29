@@ -695,7 +695,7 @@
                     <string>...</string>
                    </property>
                    <property name="icon">
-                    <iconset theme="system-run"/>
+                    <iconset theme="applications-development"/>
                    </property>
                   </widget>
                  </item>
@@ -836,6 +836,9 @@
                  </item>
                  <item>
                   <widget class="QToolButton" name="genSuggestionsButton">
+                   <property name="toolTip">
+                    <string>Generate a set of good initial picks for your candidates and picks based on a heuristic</string>
+                   </property>
                    <property name="styleSheet">
                     <string notr="true">border: none</string>
                    </property>
@@ -843,7 +846,7 @@
                     <string>...</string>
                    </property>
                    <property name="icon">
-                    <iconset theme="QIcon::ThemeIcon::AddressBookNew"/>
+                    <iconset theme="applications-utilities"/>
                    </property>
                   </widget>
                  </item>
