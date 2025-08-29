@@ -5,7 +5,7 @@ from PyQt6.QtCore import (QCoreApplication, QSettings, QStandardPaths, Qt,
 )
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QDialog, QListWidgetItem,
     QMessageBox, QItemDelegate, QLineEdit, QListWidget, QFormLayout, QSpinBox,
-    QDialogButtonBox, QComboBox
+    QDialogButtonBox, QComboBox, QTreeWidgetItem
 )
 from PyQt6.QtGui import (QColorConstants, QValidator, QFont, QTextCursor,
     QCloseEvent, QIcon
@@ -776,12 +776,7 @@ class MainPreferences(QDialog, Ui_preferences):
             selected_item.setText(f"{editor_text} (active)")
             self.initialPicksList.closePersistentEditor(selected_item)
             self.addInitialPickButton.setEnabled(True)
-        selected_items = self.initialPicksList.selectedItems()
-        if not selected_items:
-            logging.debug("No valid word selected after closing editor")
-            QMessageBox.warning(self, "Invalid Selection", "Please select a valid word for decision tree generation.")
-            return
-        pick = selected_items[0].text().split(" (")[0].strip()
+        pick = selected_item.text().split(" (")[0].strip()
         if not pick:
             logging.debug("Empty word selected for decision tree generation")
             QMessageBox.warning(self, "Invalid Word", "The selected word is empty or invalid.")
@@ -800,11 +795,11 @@ class MainPreferences(QDialog, Ui_preferences):
             # Add to decisionTreeList if not already present
             if pick not in [self.decisionTreeList.item(i).text() for i in range(self.decisionTreeList.count())]:
                 self.decisionTreeList.addItem(pick)
-            for i in range(self.initialPicksList.count()):
-                if self.initialPicksList.item(i).text().startswith(f"{pick} ("):
-                    self.initialPicksList.takeItem(i)
-                    break
-            self.saveSettings()
+                for i in range(self.initialPicksList.count()):
+                    if self.initialPicksList.item(i).text() == pick:
+                        self.initialPicksList.takeItem(i)
+                        break
+                self.saveSettings()
         else:
             parent.statusBar.showMessage(f"Failed to generate decision tree for {pick}")
             QMessageBox.warning(self, "Error", f"Failed to generate decision tree for '{pick}'")
@@ -941,19 +936,13 @@ class MainPreferences(QDialog, Ui_preferences):
         new_name = self.profileComboBox.lineEdit().text().strip()
         if not new_name or new_name == old_name:
             logging.debug(f"Invalid or unchanged new name: '{new_name}'")
-            self.profileComboBox.lineEdit().clear()
-            logging.debug(f"Invalid or unchanged new name: {new_name}")
+            self.profileComboBox.lineEdit().setText(old_name)  # Restore old name
             return
         # Generate unique name if conflict
         new_name = self.getUniqueProfileName(new_name)
         logging.debug(f"Renaming profile from {old_name} to {new_name}")
-        # Disconnect currentTextChanged to prevent loadProfileSettings
+        self.profileComboBox.blockSignals(True)
         try:
-            self.profileComboBox.activated.disconnect(self.loadProfileSettings)
-        except TypeError:
-            pass
-        try:
-            # Move profile to modified with new name, preserving data
             if old_name in self.profile_manager.modified:
                 profile = self.profile_manager.modified.pop(old_name)
             else:
@@ -968,28 +957,23 @@ class MainPreferences(QDialog, Ui_preferences):
             self.profileComboBox.setItemText(current_index, new_name)
             self.profileComboBox.setItemData(current_index, new_name, Qt.ItemDataRole.UserRole)
             self.profileComboBox.setItemIcon(current_index, self.default_icon if was_default else QIcon())
-            self.profileComboBox.setCurrentIndex(current_index)  # Explicitly set current index
-            logging.debug(f"Renamed profile to {new_name}, currentIndex={current_index}")
-            # Clear line edit and restore focus to combo box
-            self.profileComboBox.lineEdit().setText(new_name)  # Set to new name to avoid blank display
-            self.profileComboBox.setFocus()
-            # Trigger UI update
+            self.profileComboBox.lineEdit().setText(new_name)
+            self.profileComboBox.clearEditText()
             self.loadProfileSettings(current_index)
-            # self.profileComboBox.repaint()  # Force combo box refresh
-            logging.debug(f"ComboBox state after rename: items={self.profileComboBox.count()}, currentIndex={self.profileComboBox.currentIndex()}, currentText={self.profileComboBox.currentText()}")
         finally:
-            self.profileComboBox.activated.connect(self.loadProfileSettings)
+            self.profileComboBox.blockSignals(False)
         self.is_modified = True
+        self.parent().statusBar.showMessage(f"Renamed profile from {old_name} to {new_name}")
 
     @pyqtSlot()
     def removeProfile(self):
         current_index = self.profileComboBox.currentIndex()
         if current_index < 0:
             return
-        profile = self.profileComboBox.itemData(current_index, Qt.ItemDataRole.UserRole)
-        if profile == "Basic":
-            QMessageBox.warning(self, "Cannot Remove Profile", "The 'Basic' profile cannot be removed.")
+        if self.profileComboBox.count() == 1:
+            QMessageBox.warning(self, "Cannot Remove Profile", "Cannot remove the last profile.")
             return
+        profile = self.profileComboBox.itemData(current_index, Qt.ItemDataRole.UserRole)
         reply = QMessageBox.question(
             self, "Remove Profile",
             f"Are you sure you want to remove the profile '{profile}'?",
@@ -999,10 +983,7 @@ class MainPreferences(QDialog, Ui_preferences):
             return
         logging.debug(f"Removing profile {profile}")
         self.profile_manager.deleteProfile(profile)
-        try:
-            self.profileComboBox.activated.disconnect(self.loadProfileSettings)
-        except TypeError:
-            pass
+        self.profileComboBox.blockSignals(True)
         try:
             self.profileComboBox.removeItem(current_index)
             default_profile = self.profile_manager.getDefaultProfile()
@@ -1018,11 +999,10 @@ class MainPreferences(QDialog, Ui_preferences):
                 name = self.profileComboBox.itemData(i, Qt.ItemDataRole.UserRole)
                 self.profileComboBox.setItemIcon(i, self.default_icon if name == default_profile else QIcon())
         finally:
-            self.profileComboBox.activated.connect(self.loadProfileSettings)
+            self.profileComboBox.blockSignals(False)
         self.loadProfileSettings(self.profileComboBox.currentIndex())
         # self.profileComboBox.repaint()  # Ensure combo box is refreshed
         self.is_modified = True
-
 
     @pyqtSlot(QListWidgetItem)
     def validateInitialPick(self, item):
@@ -1114,7 +1094,6 @@ class MainPreferences(QDialog, Ui_preferences):
                 self.picksList.takeItem(self.picksList.currentRow())
                 self.is_modified = True
                 logging.debug(f"Removed pick {text} from profile {self.profile_manager.getCurrentProfile()}")
-
 
     @pyqtSlot()
     def savePicksToFile(self):
@@ -1244,10 +1223,7 @@ class MainPreferences(QDialog, Ui_preferences):
             profile = Profile(word_length=length, game_type=GameType.WORDLE, dirty=True)
             self.profile_manager.modified[name] = profile
             self.profile_manager.setCurrentProfile(name)
-            try:
-                self.profileComboBox.activated.disconnect(self.loadProfileSettings)
-            except TypeError:
-                pass
+            self.profileComboBox.blockSignals(True)
             try:
                 self.profileComboBox.addItem(name, userData=name)
                 index = self.profileComboBox.count() - 1
@@ -1255,7 +1231,7 @@ class MainPreferences(QDialog, Ui_preferences):
                 default_profile = self.profile_manager.getDefaultProfile()
                 self.profileComboBox.setItemIcon(index, self.default_icon if name == default_profile else QIcon())
             finally:
-                self.profileComboBox.activated.connect(self.loadProfileSettings)
+                self.profileComboBox.blockSignals(False)
             self.loadProfileSettings(self.profileComboBox.currentIndex())
             # self.profileComboBox.repaint()  # Ensure combo box is refreshed
             self.is_modified = True
@@ -1274,10 +1250,7 @@ class MainPreferences(QDialog, Ui_preferences):
         profile.dirty = True
         self.profile_manager.modified[new_name] = profile
         self.profile_manager.setCurrentProfile(new_name)
-        try:
-            self.profileComboBox.activated.disconnect(self.loadProfileSettings)
-        except TypeError:
-            pass
+        self.profileComboBox.blockSignals(True)
         try:
             self.profileComboBox.addItem(new_name, userData=new_name)
             index = self.profileComboBox.count() - 1
@@ -1286,7 +1259,7 @@ class MainPreferences(QDialog, Ui_preferences):
             self.profileComboBox.setItemIcon(index, self.default_icon if new_name == default_profile else QIcon())
             logging.debug(f"Added copied profile {new_name} to QComboBox at index {index}")
         finally:
-            self.profileComboBox.activated.connect(self.loadProfileSettings)
+            self.profileComboBox.blockSignals(False)
         self.loadProfileSettings(self.profileComboBox.currentIndex())
         # self.profileComboBox.repaint()  # Ensure combo box is refreshed
         self.parent().statusBar.showMessage(f"Copied profile {source_profile} to {new_name}")
