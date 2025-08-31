@@ -84,7 +84,7 @@
   <customwidget>
    <class>ExtraContextPlainTextEdit</class>
    <extends>QPlainTextEdit</extends>
-   <header>ui/ExtraContextPlainTextEdit.h</header>
+   <header>wordlesmash/ui/ExtraContextPlainTextEdit.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

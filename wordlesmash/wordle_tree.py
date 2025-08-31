@@ -8,18 +8,18 @@ from functools import partial, cmp_to_key
 import tempfile
 import heapq
 import logging
-from lazy_handler import LazyRotatingFileHandler
+from .lazy_handler import LazyRotatingFileHandler
 
 from string import ascii_uppercase
 
-from wordle_game import Color
-from filter_code import FilterCode
-from tree_utils import (read_decision_tree, read_decision_routes, dt_to_routes,
+from .wordle_game import Color
+from .filter_code import FilterCode
+from .tree_utils import (read_decision_tree, read_decision_routes, dt_to_routes,
                         routes_to_dt, routes_to_text, routes_to_text_gen,
                         verify_routes)
 
-from wordle_game import get_clue_for_secret
-from utils import LazyList, load_word_list
+from .wordle_game import get_clue_for_secret
+from .utils import LazyList, load_word_list
 import cProfile
 import pstats
 import hashlib

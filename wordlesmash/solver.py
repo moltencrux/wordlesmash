@@ -4,16 +4,16 @@ from collections import Counter, ChainMap
 from collections.abc import Iterable
 from string import ascii_uppercase
 from heapq import nsmallest, nlargest
-from call_counter import call_counter
-from wordle_game import Color
-from wordle_tree import WordleTree
+from .call_counter import call_counter
+from .wordle_game import Color
+from .wordle_tree import WordleTree
 from itertools import chain, islice
 from abc import ABCMeta, abstractmethod, abstractclassmethod
-from tree_utils import read_decision_tree, routes_to_dt, dt_to_routes, read_decision_routes
+from .tree_utils import read_decision_tree, routes_to_dt, dt_to_routes, read_decision_routes
 import numpy as np
-from utils import diff_indexes, load_word_list
-from or_matrix import compute_or_matrix, is_or_matrix, find_closed_components
-from filter_code import FilterCode
+from .utils import diff_indexes, load_word_list
+from .or_matrix import compute_or_matrix, is_or_matrix, find_closed_components
+from .filter_code import FilterCode
 from scipy.sparse import lil_matrix
 from copy import deepcopy
 from pathlib import PosixPath
