@@ -1,12 +1,12 @@
 from itertools import batched, groupby, chain
 from collections import namedtuple, Counter
 from dataclasses import make_dataclass
-from wordle_game import Color
+# from .wordle_game import Color
 from struct import pack
 from base64 import b64decode, b64encode
 from string import ascii_uppercase
 import numpy as np
-from rank_comb import generate_combination, rank_combination, rank_multiset, generate_multiset
+from .rank_comb import generate_combination, rank_combination, rank_multiset, generate_multiset
 
 
 

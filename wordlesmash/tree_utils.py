@@ -1,13 +1,13 @@
 from itertools import batched, zip_longest
 from collections import namedtuple, Counter
 from dataclasses import make_dataclass
-from wordle_game import Color
+from .wordle_game import Color
 from struct import pack
 from base64 import b64decode, b64encode
 from string import ascii_uppercase
 import numpy as np
-from rank_comb import generate_combination, rank_combination, rank_multiset
-from wordle_game import get_clue_for_secret
+from .rank_comb import generate_combination, rank_combination, rank_multiset
+from .wordle_game import get_clue_for_secret
 
 """
 so maybe 25 bits max for the yellow spot blacklist

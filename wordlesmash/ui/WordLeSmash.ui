@@ -1466,7 +1466,7 @@
   <customwidget>
    <class>WordTableWidget</class>
    <extends>QTableWidget</extends>
-   <header>ui/WordTableWidget.h</header>
+   <header>wordlesmash/ui/WordTableWidget.h</header>
    <slots>
     <slot>onListItemSelected(QListWidgetItem*)</slot>
     <slot>onVirtualKeyPressed()</slot>

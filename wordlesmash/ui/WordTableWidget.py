@@ -9,7 +9,7 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QPalette, QKeyEvent
 from string import ascii_uppercase
 import sys
 from collections.abc import Sequence, Iterable
-from wordle_game import Color
+from ..wordle_game import Color
 from itertools import chain, islice
 
 
