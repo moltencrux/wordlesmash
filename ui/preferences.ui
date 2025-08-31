@@ -971,19 +971,26 @@
              <property name="frameShadow">
               <enum>QFrame::Shadow::Plain</enum>
              </property>
+             <property name="columnCount">
+              <number>2</number>
+             </property>
+             <attribute name="headerDefaultSectionSize">
+              <number>400</number>
+             </attribute>
+             <attribute name="headerStretchLastSection">
+              <bool>true</bool>
+             </attribute>
              <column>
               <property name="text">
-               <string notr="true">Picks</string>
+               <string notr="true">Pick Color Result</string>
               </property>
              </column>
              <column>
               <property name="text">
-               <string>Candidates</string>
+               <string>Candidates Remaining</string>
               </property>
-             </column>
-             <column>
-              <property name="text">
-               <string>Clue Colors</string>
+              <property name="toolTip">
+               <string extracomment="The number of remaining candidate solutions after this pick result"/>
               </property>
              </column>
             </widget>
