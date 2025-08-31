@@ -53,7 +53,10 @@
       <string notr="true"/>
      </property>
      <property name="text">
-      <string>Evaluating routes ...</string>
+      <string>Evaluating routes</string>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::TextFormat::RichText</enum>
      </property>
      <property name="alignment">
       <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
