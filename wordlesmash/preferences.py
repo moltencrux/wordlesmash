@@ -58,7 +58,6 @@ class MainPreferences(QDialog, Ui_preferences):
         self.candidatesList.setItemDelegate(delegate_candidates)
         # Initialize chartTreeButton as disabled
         self.chartTreeButton.setEnabled(False)
-        self.removeTreeButton.setEnabled(False)
         self.initialPicksList.itemSelectionChanged.connect(self.onInitialPicksListSelectionChanged)
         self.chartTreeButton.clicked.connect(self.onChartTreeButtonClicked)
         self.profileComboBox.activated.connect(self.onProfileChanged)
@@ -193,7 +192,6 @@ class MainPreferences(QDialog, Ui_preferences):
                     self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
                     self.addInitialPickButton.setEnabled(True)
                     return
-            selected_item.setText(f"{editor_text} (active)")
             self.initialPicksList.closePersistentEditor(selected_item)
             self.addInitialPickButton.setEnabled(True)
         pick = selected_item.text().split(" (")[0].strip()
@@ -250,7 +248,7 @@ class MainPreferences(QDialog, Ui_preferences):
         # Remove from decisionTreeList
         self.decisionTreeList.takeItem(self.decisionTreeList.currentRow())
         if word not in [self.initialPicksList.item(i).text().split(" (")[0] for i in range(self.initialPicksList.count())]:
-            self.initialPicksList.addItem(f"{word} (active)")
+            self.initialPicksList.addItem(word)
             profile.initial_picks.append(word)
             profile.dirty = True
         self.is_modified = True
@@ -447,7 +445,6 @@ class MainPreferences(QDialog, Ui_preferences):
             else:
                 self.initialPicksList.takeItem(self.initialPicksList.row(item))
                 return
-        item.setText(f"{text} (active)")
         if text not in profile.initial_picks:
             profile.initial_picks.append(text)
             profile.dirty = True
