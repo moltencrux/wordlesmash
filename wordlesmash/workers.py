@@ -1,7 +1,7 @@
 from PyQt6.QtCore import pyqtSlot, pyqtSignal, QThread
 from threading import Event
 from pathlib import Path
-from .tree_utils import routes_to_text
+from .tree_utils import routes_to_text, routes_to_dt
 import logging
 
 class SuggestionGetter(QThread):
@@ -40,14 +40,10 @@ class DecisionTreeRoutesGetter(QThread):
                 logging.error(f"Invalid or empty routes generated for {self.pick}")
                 self.ready.emit(self.pick, False)
                 return
+
+            tree = routes_to_dt(self.routes)
             profile_name = self.profile_manager.getCurrentProfile()
-            profile_dir = Path(self.profile_manager.app_data_path) / "profiles" / profile_name
-            dtree_dir = profile_dir / "dtree"
-            dtree_dir.mkdir(parents=True, exist_ok=True)
-            tree_file = dtree_dir / f"{self.pick}.txt"
-            with tree_file.open("w", encoding="utf-8") as f:
-                f.write(routes_to_text(self.routes))
-            logging.debug(f"Decision tree saved to {tree_file}")
+            self.profile_manager.addDecisionTree(profile_name, tree)
             self.ready.emit(self.pick, True)
         except Exception as e:
             logging.error(f"Failed to generate decision tree for {self.pick}: {e}")

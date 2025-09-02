@@ -1,5 +1,7 @@
 from PyQt6.QtCore import Qt, pyqtSlot
-from PyQt6.QtWidgets import QDialog, QComboBox, QDialogButtonBox, QListWidgetItem, QItemDelegate, QTreeWidgetItem
+from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
+    QItemDelegate, QListWidgetItem, QMessageBox, QTreeWidgetItem,
+)
 from PyQt6.QtGui import QIcon
 from .ui_loader import load_ui_class, UI_CLASSES
 from .solver import DecisionTreeGuessManager
@@ -225,37 +227,31 @@ class MainPreferences(QDialog, Ui_preferences):
 
     @pyqtSlot()
     def removeDecisionTree(self):
-        selected_items = self.decisionTreeList.selectedItems()
-        if not selected_items:
+        """Remove the selected decision tree, re-add its word to initialPicksList, and mark profile as modified."""
+        selected_item = next(iter(self.decisionTreeList.selectedItems()), None)
+        if not selected_item:
             logger.debug("No decision tree selected for removal")
             QMessageBox.warning(self, "No Selection", "Please select a decision tree to remove.")
             return
-        word = selected_items[0].text()
+        word = selected_item.text()
         profile_name = self.profile_manager.getCurrentProfile()
-        profile = self.profile_manager.modifyProfile(profile_name, profile_name)
-        dtree_dir = self.profile_manager.app_data_path / "profiles" / profile_name / "dtree"
-        tree_file = dtree_dir / f"{word}.txt"
-        if tree_file.exists():
-            try:
-                tree_file.unlink()
-                logger.debug(f"Deleted decision tree file: {tree_file}")
-                if word in profile.dt:
-                    del profile.dt[word]
-                    profile.dirty = True
-            except OSError as e:
-                logger.error(f"Failed to delete decision tree file {tree_file}: {e}")
-                QMessageBox.critical(self, "Error", f"Failed to delete decision tree for '{word}'.")
-                return
+        # Stage deletion in ProfileManager
+        self.profile_manager.removeDecisionTree(profile_name, word)
         # Remove from decisionTreeList
-        self.decisionTreeList.takeItem(self.decisionTreeList.currentRow())
-        if word not in [self.initialPicksList.item(i).text().split(" (")[0] for i in range(self.initialPicksList.count())]:
-            self.initialPicksList.addItem(word)
-            profile.initial_picks.append(word)
+        self.decisionTreeList.takeItem(self.decisionTreeList.row(selected_item))
+        # Re-add word to initialPicksList if not already present
+        if not any(self.initialPicksList.item(i).text() == word for i in range(self.initialPicksList.count())):
+            item = QListWidgetItem(word)
+            self.initialPicksList.addItem(item)
+            logging.debug(f"Re-added word {word} to initialPicksList")
+        # Update profile's initial_picks to include the word
+        profile = self.getCurrentModifiedProfile()
+        if word not in profile.initial_picks:
+            profile.initial_picks.add(word)
             profile.dirty = True
+            logger.debug(f"Added {word} to profile.initial_picks")
+        self.updateCountLabels()
         self.is_modified = True
-        self.guess_manager = None
-        logger.debug("Invalidated guess_manager due to decision tree removal")
-        self.parent().statusBar.showMessage(f"Removed decision tree for {word}")
 
     def loadSettings(self):
         self.profileComboBox.clear()
@@ -546,10 +542,9 @@ class MainPreferences(QDialog, Ui_preferences):
     @pyqtSlot()
     def onCancel(self):
         logger.debug("onCancel called")
-        self.profile_manager.modified.clear()
-        self.profile_manager.to_delete.clear()
-        self.profile_manager._default_profile = self.profile_manager.settings.value("default_profile", defaultValue=None)
+        self.profile_manager.discardChanges()
         self.is_modified = False
+        self.loadSettings() # or maybe on show?
         self.reject()
 
     @pyqtSlot()
@@ -780,7 +775,7 @@ class MainPreferences(QDialog, Ui_preferences):
                 text = ','.join(f'{char}:{color_hex_map[c]}' for char, c in zip(pick, clue))
                 item.setText(0, text)
                 if new_dt is not None:
-                    stack.append((item,  new_dt))
+                    stack.append((item, new_dt))
                 else:
                     item.setText(1, '1') # Leaves have value 1
 
@@ -806,10 +801,11 @@ class MainPreferences(QDialog, Ui_preferences):
         # Check if an editor is open and retrieve its text
         current_profile = self.profile_manager.getCurrentProfile()
         profile = self.profile_manager.loadProfile(current_profile)
-
-        tree = {selected_item.text(): profile.dt[selected_item.text()]}
-
-
+        word = selected_item.text()
+        if word not in profile.dt or profile.dt[word] is None:
+            logging.debug(f"No valid decision tree for {word}")
+            return
+        tree = {word: profile.dt[word]}
         tree_widget_item = self.create_tree_widget_items_it(tree)
         self.treeWidget.addTopLevelItem(tree_widget_item)
         tree_widget_item.setExpanded(True)
