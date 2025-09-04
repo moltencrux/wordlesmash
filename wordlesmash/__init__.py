@@ -18,6 +18,7 @@ __all__ = [
     "MainPreferences",
     "ProfileManager",
     "Profile",
+    "Models",
     "GameType",
     "ProgressDialog",
     "NewProfileDialog",
