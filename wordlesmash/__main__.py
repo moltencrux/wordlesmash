@@ -5,8 +5,7 @@ from PyQt6.QtCore import QCoreApplication
 from .main_window import MainWordLeSmashWindow
 from .ui.wordlesmash_rc import qInitResources
 
-logging.basicConfig(level=logging.DEBUG if __debug__ else logging.ERROR, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 QCoreApplication.setApplicationName('WordLeSmash')
 QCoreApplication.setOrganizationName('moltencrux')
@@ -15,6 +14,7 @@ qInitResources()
 
 def main():
     """Entry point for running the WordLeSmash application."""
+    logger.debug('__main__.py: starting')
     app = QApplication(sys.argv)
     window = MainWordLeSmashWindow()
     window.show()

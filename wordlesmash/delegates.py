@@ -1,7 +1,9 @@
 from PyQt6.QtCore import Qt, pyqtSlot, QSize, QRect
 from PyQt6.QtWidgets import QLineEdit, QItemDelegate, QStyledItemDelegate
 from PyQt6.QtGui import QValidator, QPainter, QFont, QColor
+import logging
 
+logger = logging.getLogger(__name__)
 
 class UpperCaseValidator(QValidator):
     def __init__(self, word_length, parent=None):

@@ -7,6 +7,9 @@ from .profile_manager import ProfileManager
 from .solver import DecisionTreeGuessManager
 from .dialogs import ProgressDialog
 from .workers import SuggestionGetter
+import logging
+
+logger = logging.getLogger(__name__)
 
 Ui_MainWindow = load_ui_class(*UI_CLASSES['MainWordLeSmashWindow'])
 

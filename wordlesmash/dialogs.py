@@ -5,6 +5,7 @@ from .ui_loader import load_ui_class, UI_CLASSES
 import logging
 from itertools import cycle
 
+logger = logging.getLogger(__name__)
 
 Ui_NewProfile = load_ui_class(*UI_CLASSES['NewProfileDialog'])
 Ui_BatchAdd = load_ui_class(*UI_CLASSES['BatchAddDialog'])
@@ -97,18 +98,18 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
         self.timer = QTimer(self)  # Initialize QTimer
         self.timer.timeout.connect(self.updateLabel)  # Connect timeout signal to updateLabel method
         self.timer.start(400)  # Start the timer with a 500 ms interval
-        logging.debug("ProgressDialog initialized, timer started")
+        logger.debug("ProgressDialog initialized, timer started")
 
     def initUI(self):
         self.setupUi(self)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoTitleBarBackgroundHint)
         self.setWindowModality(Qt.WindowModality.WindowModal)
-        logging.debug(f"ProgressDialog window flags: {self.windowFlags()}")
+        logger.debug(f"ProgressDialog window flags: {self.windowFlags()}")
         try:
             self.spinner.start()
-            logging.debug("ProgressDialog spinner started")
+            logger.debug("ProgressDialog spinner started")
         except AttributeError as e:
-            logging.error(f"ProgressDialog spinner not properly initialized: {e}")
+            logger.error(f"ProgressDialog spinner not properly initialized: {e}")
         self.cancelButton.clicked.connect(self.onCancelRequested)
 
     def updateLabel(self):
@@ -119,18 +120,18 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
     def onCancelRequested(self):
         self.spinner.setDisabled(True)
         self.label.setText("Canceling routes generation")
-        logging.debug("Cancellation requested in ProgressDialog")
+        logger.debug("Cancellation requested in ProgressDialog")
         if self.cancel_callback:
             try:
                 self.cancel_callback()
-                logging.debug("Called cancel_callback in ProgressDialog")
+                logger.debug("Called cancel_callback in ProgressDialog")
             except Exception as e:
-                logging.error(f"Error executing cancel_callback: {e}")
+                logger.error(f"Error executing cancel_callback: {e}")
 
     def keyPressEvent(self, event):
-        logging.debug(f"ProgressDialog keyPressEvent: key={event.key()}, focusWidget={self.focusWidget()}, flags={self.windowFlags()}")
+        logger.debug(f"ProgressDialog keyPressEvent: key={event.key()}, focusWidget={self.focusWidget()}, flags={self.windowFlags()}")
         if event.key() == Qt.Key.Key_Escape:
-            logging.debug("Esc key press in ProgressDialog, triggering onCancelRequested")
+            logger.debug("Esc key press in ProgressDialog, triggering onCancelRequested")
             self.onCancelRequested()
             event.accept()
             return
@@ -138,13 +139,13 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
 
     def closeEvent(self, event: QCloseEvent):
         """Stop the timer and spinner before closing the dialog."""
-        logging.debug("ProgressDialog closeEvent triggered")
+        logger.debug("ProgressDialog closeEvent triggered")
         self.timer.stop()
-        logging.debug("ProgressDialog timer stopped")
+        logger.debug("ProgressDialog timer stopped")
         try:
             self.spinner.stop()
-            logging.debug("ProgressDialog spinner stopped")
+            logger.debug("ProgressDialog spinner stopped")
         except AttributeError as e:
-            logging.error(f"ProgressDialog spinner not properly initialized: {e}")
-        logging.debug("ProgressDialog cancelButton signal disconnected")
+            logger.error(f"ProgressDialog spinner not properly initialized: {e}")
+        logger.debug("ProgressDialog cancelButton signal disconnected")
         super().closeEvent(event)

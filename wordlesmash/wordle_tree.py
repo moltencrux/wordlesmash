@@ -34,6 +34,7 @@ from math import inf
 import threading
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
 
 class CompoundEvent:
     def __init__(self, *events):
@@ -50,18 +51,6 @@ class CompoundEvent:
         for event in self.events:
             event.clear()
 
-def setup_logger(prefix=None):
-    pid = os.getpid()
-    log_file = f"log_{pid}.log"
-    logger = logging.getLogger("Wordle Tree Logger")
-    logger.setLevel(logging.DEBUG)
-    handler = LazyRotatingFileHandler(tmpdir_prefix=prefix, basename=log_file, maxBytes=10*(1024 ** 2), backupCount=3)
-    logger.addHandler(handler)
-    stderr_handler = logging.StreamHandler(sys.stderr)
-    logger.addHandler(stderr_handler)
-    return logger
-
-logger = setup_logger('wordlesmash.')
 
 class StateNode:
     # Keys a single filter state where various word options will be explored,
@@ -1128,6 +1117,19 @@ def main():
 
 
 if __name__ == '__main__' and False:
+
+    def setup_logger(prefix=None):
+        pid = os.getpid()
+        log_file = f"log_{pid}.log"
+        logger = logging.getLogger("Wordle Tree Logger")
+        logger.setLevel(logging.DEBUG)
+        handler = LazyRotatingFileHandler(tmpdir_prefix=prefix, basename=log_file, maxBytes=10*(1024 ** 2), backupCount=3)
+        logger.addHandler(handler)
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        logger.addHandler(stderr_handler)
+        return logger
+
+    logger = setup_logger('wordlesmash.')
 
     cProfile.run('main()', 'output.prof')
 

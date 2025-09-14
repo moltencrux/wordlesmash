@@ -6,8 +6,7 @@ from PyQt6.QtCore import QStandardPaths
 from .tree_utils import routes_to_dt, read_decision_routes, dt_to_text
 import logging
 
-
-
+logger = logging.getLogger(__name__)
 
 class GameType(Enum):
     WORDLE = "wordle"
@@ -41,7 +40,7 @@ class ProfileManager:
 
     def setCurrentProfile(self, name: str):
         self.current_profile = name
-        logging.debug(f"Set current profile: {name}")
+        logger.debug(f"Set current profile: {name}")
 
     def getDefaultProfile(self) -> Optional[str]:
         return self._default_profile
@@ -78,7 +77,7 @@ class ProfileManager:
 
     def loadProfile(self, name: str) -> Profile:
         if name in self.modified:
-            logging.debug(f"Loading modified profile: {name}, picks: {self.modified[name].picks}, candidates: {self.modified[name].candidates}")
+            logger.debug(f"Loading modified profile: {name}, picks: {self.modified[name].picks}, candidates: {self.modified[name].candidates}")
             return self.modified[name]
         if name in self.loaded:
             return self.loaded[name]
@@ -133,7 +132,7 @@ class ProfileManager:
         # Save candidates to candidates.txt
         with open(profile_dir / "candidates.txt", "w", encoding="utf-8") as f:
             f.write("\n".join(profile.candidates))
-        logging.debug(f"Saved profile: {name}, initial_picks: {profile.initial_picks}, picks: {profile.picks}, candidates: {profile.candidates}")
+        logger.debug(f"Saved profile: {name}, initial_picks: {profile.initial_picks}, picks: {profile.picks}, candidates: {profile.candidates}")
         dtree_dir = profile_dir / "dtree"
         dtree_dir.mkdir(parents=True, exist_ok=True)
         for word, subtree in profile.dt.items():
@@ -144,17 +143,17 @@ class ProfileManager:
         # Mark profile for deletion instead of immediate removal
         if name not in self.to_delete:
             self.to_delete.append(name)
-            logging.debug(f"Marked profile {name} for deletion")
+            logger.debug(f"Marked profile {name} for deletion")
         if name == self.current_profile:
             self.current_profile = None
         if name == self._default_profile:
             self._default_profile = None
-            logging.debug(f"Deleted default profile {name}, _default_profile set to None")
+            logger.debug(f"Deleted default profile {name}, _default_profile set to None")
 
     def processDeletions(self):
         # Process all marked deletions
         for name in self.to_delete:
-            logging.debug(f"Processing deletion for profile {name}")
+            logger.debug(f"Processing deletion for profile {name}")
             self.settings.beginGroup("profiles")
             self.settings.remove(name)
             self.settings.endGroup()
@@ -167,27 +166,27 @@ class ProfileManager:
             if name in self.loaded:
                 del self.loaded[name]
         self.to_delete.clear()
-        logging.debug("All marked profiles deleted")
+        logger.debug("All marked profiles deleted")
 
     def modifyProfile(self, name: str, original_name: Optional[str] = None) -> Profile:
-        logging.debug(f"modifyProfile called for name: {name}, original_name: {original_name}")
+        logger.debug(f"modifyProfile called for name: {name}, original_name: {original_name}")
         if name in self.modified:
             profile = self.modified[name]
-            logging.debug(f"Returning existing modified profile: {name}")
+            logger.debug(f"Returning existing modified profile: {name}")
         else:
             if name in self.loaded:
                 profile = self.loaded.pop(name)
-                logging.debug(f"Popped profile from loaded: {name}")
+                logger.debug(f"Popped profile from loaded: {name}")
             else:
                 profile = self.loadProfile(name) if original_name else Profile()
-                logging.debug(f"Created new profile for: {name}")
+                logger.debug(f"Created new profile for: {name}")
             profile.original_name = original_name if original_name else name
             profile.dirty = True
             self.modified[name] = profile
         # Update _default_profile if renaming the default profile
         if original_name and original_name == self._default_profile:
             self._default_profile = name
-            logging.debug(f"Default profile renamed from {original_name} to {name}")
+            logger.debug(f"Default profile renamed from {original_name} to {name}")
         return profile
 
     def has_pending_changes(self) -> bool:
@@ -198,11 +197,11 @@ class ProfileManager:
 
     def commitChanges(self):
         """Save all modified profiles, process deletions, and update default profile."""
-        logging.debug("Committing changes in ProfileManager")
+        logger.debug("Committing changes in ProfileManager")
         self.processDeletions()  # Process pending deletions
         for name, profile in self.modified.items():
             if profile.dirty:
-                logging.debug(f"Saving profile: {name}, initial_picks: {profile.initial_picks}, picks: {profile.picks}, candidates: {profile.candidates}")
+                logger.debug(f"Saving profile: {name}, initial_picks: {profile.initial_picks}, picks: {profile.picks}, candidates: {profile.candidates}")
                 self.saveProfile(name, profile)
         # Save default profile if changed
         current_default = self.settings.value("default_profile", defaultValue=None)
@@ -212,8 +211,8 @@ class ProfileManager:
             if self._default_profile is None or self._default_profile in valid_profiles:
                 self.settings.setValue("default_profile", self._default_profile)
                 self.settings.sync()
-                logging.debug(f"Saved default profile to QSettings: {self._default_profile}")
+                logger.debug(f"Saved default profile to QSettings: {self._default_profile}")
             else:
-                logging.warning(f"Invalid default profile {self._default_profile}, not saving to QSettings")
+                logger.warning(f"Invalid default profile {self._default_profile}, not saving to QSettings")
         self.modified.clear()
-        logging.debug("All changes committed, cleared modified profiles")
+        logger.debug("All changes committed, cleared modified profiles")
