@@ -9,14 +9,25 @@ class UpperCaseValidator(QValidator):
     def __init__(self, word_length, parent=None):
         super().__init__(parent)
         self.word_length = word_length
+        self.cache = set()
+        logger.debug(f"UpperCaseValidator initialized with word_length={word_length}")
 
     def validate(self, string, pos):
+        string = string.strip().upper()
+        # Return cached state if input matches
+        if string in self.cache:
+            logger.debug(f"UpperCaseValidator: Returning cached Acceptable for '{string}'")
+            return QValidator.State.Acceptable, string, pos
         if len(string) == self.word_length and string.isalpha():
-            return QValidator.State.Acceptable, string.upper(), pos
+            state = QValidator.State.Acceptable
+            self.cache.add(string)
+            # Cache Acceptable state
+            logger.debug(f"UpperCaseValidator: Cached Acceptable for '{string}'")
         elif string == '' or string.isalpha():
-            return QValidator.State.Intermediate, string.upper(), pos
+            state = QValidator.State.Intermediate
         else:
-            return QValidator.State.Invalid, string.upper(), pos
+            state = QValidator.State.Invalid
+        return state, string, pos
 
 class PickValidator(UpperCaseValidator):
     def __init__(self, word_length, profile, parent=None):
@@ -24,10 +35,16 @@ class PickValidator(UpperCaseValidator):
         self.profile = profile
 
     def validate(self, string, pos):
-        if self.profile.model._picks.get(string.upper()) is not None:
-            return QValidator.State.Intermediate, string.upper(), pos
-        else:
-            return super().validate(string, pos)
+        string = string.strip().upper()
+        # Return cached state if input matches
+        if string in self.cache:
+            logger.debug(f"PickValidator: Returning cached Acceptable for '{string}'")
+            return QValidator.State.Acceptable, string, pos
+        elif self.profile.model._picks.get(string) is not None:
+            return QValidator.State.Intermediate, string, pos
+
+        return super().validate(string, pos)
+
 
 class CandidateValidator(UpperCaseValidator):
     def __init__(self, word_length, profile, parent=None):
@@ -35,13 +52,16 @@ class CandidateValidator(UpperCaseValidator):
         self.profile = profile
 
     def validate(self, string, pos):
-        # if string.upper() in self.profile.candidates:
-        if self.profile.model._picks.get(string.upper()) not in (None, 'candidate'):
-            return QValidator.State.Intermediate, string.upper(), pos
-        else:
-            return super().validate(string, pos)
+        string = string.strip().upper()
+        # Return cached state if input matches
+        if string in self.cache:
+            logger.debug(f"CandidateValidator: Returning cached Acceptable for '{string}'")
+            return QValidator.State.Acceptable, string, pos
+        elif string and self.profile.model._picks.get(string) not in (None, 'candidate'):
+            logger.debug(f"CandidateValidator: '{string}' is a pick but not a candidate")
+            return QValidator.State.Intermediate, string, pos
 
-
+        return super().validate(string, pos)
 
 class UpperCaseDelegate(QItemDelegate):
     def __init__(self, word_length, profile, parent=None):

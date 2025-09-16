@@ -185,14 +185,16 @@ class PicksModel(QAbstractListModel):
             return False
 
     def remove_candidate_by_row(self, row):
-        if index != -1:
-            text = self._items[row]
-            if text in self._picks[text] == 'candidate':
-                model_index = self.index(index, 0)
-                self.dataChanged.emit(model_index, model_index, [Qt.ItemDataRole.UserRole])
-                logger.debug(f"PicksModel.remove_candidate_by_text: Removed candidate '{text}'")
-                return True
-        return False
+        if not (0 <= row < len(self._items)):
+            logger.error(f"PicksModel.remove_pick_by_row: Invalid row {row}, items count={len(self._items)}")
+            return False
+        text = self._items[row]
+        if self._picks[text] == 'candidate':
+            self._picks[text] = 'pick'
+            model_index = self.index(row, 0)
+            self.dataChanged.emit(model_index, model_index, [Qt.ItemDataRole.UserRole])
+            logger.debug(f"PicksModel.remove_candidate_by_text: Removed candidate '{text}'")
+            return True
 
     def removeRows(self, row, count, parent=QModelIndex()):
         if parent.isValid() or row < 0 or row + count > len(self._items):

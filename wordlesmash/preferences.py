@@ -52,6 +52,7 @@ class MainPreferences(QDialog, Ui_preferences):
         self.managePicksDialog = BatchAddDialog(self, word_length=self.word_length, title="Batch Add Picks")
         self.manageCandidatesButton.clicked.connect(self.onManageCandidates)
         self.managePicksButton.clicked.connect(self.onManagePicks)
+        # Set delegates and connect editor signals
         delegate_initial = UpperCaseDelegate(self.word_length, self.profile_manager.getCurrentProfile(), self.initialPicksList)
         delegate_initial.closeEditor.connect(self.onCloseInitPicksEditor)
         self.initialPicksList.setItemDelegate(delegate_initial)
@@ -331,6 +332,9 @@ class MainPreferences(QDialog, Ui_preferences):
         # delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
         self.candidatesList.setItemDelegate(delegate_candidates)
         logger.debug("updateDelegates completed")
+        delegate_candidates.closeEditor.connect(self.on_editor_closed)
+        delegate_picks.closeEditor.connect(self.on_editor_closed)
+ 
 
 
     @pyqtSlot()
@@ -505,19 +509,19 @@ class MainPreferences(QDialog, Ui_preferences):
     @pyqtSlot()
     def removeCandidate(self):
         logger.debug("removeCandidate started")
-        candidates_proxy = self.picksList.model()
+        candidates_proxy = self.candidatesList.model()
         model = candidates_proxy.sourceModel()
         selected_item = self.candidatesList.currentIndex()
         if selected_item.isValid():
             source_row = candidates_proxy.mapToSource(selected_item).row()
             if 0 <= source_row < model.rowCount():
-                model.remove_pick_by_row(source_row)
+                model.remove_candidate_by_row(source_row)
                 candidates_proxy.invalidate()
                 # self.syncToProfile(self.profile_manager.getCurrentProfileName())
                 self.updateCountLabels()
 
             else:
-                logger.error(f"removeCandidate: Invalid source_row {source_row}, model_rows={self.picks_model.rowCount()}")
+                logger.error(f"removeCandidate: Invalid source_row {source_row}, model_rows={model.rowCount()}")
         logger.debug("removeCandidate completed")
 
     @pyqtSlot()
@@ -593,6 +597,7 @@ class MainPreferences(QDialog, Ui_preferences):
         profile = self.profile_manager.getCurrentProfile()
         model = self.picksList.model().sourceModel()
         words = sorted(model.get_picks())
+        logger.debug(f"onManagePicks: Passing words to dialog: {words}")
         dialog = BatchAddDialog(self, words=words, word_length=self.word_length, title="Batch Add Picks")
         if dialog.exec():
             new_words = dialog.valid_words
@@ -600,7 +605,7 @@ class MainPreferences(QDialog, Ui_preferences):
                 model.add_pick(word)
             self.syncToProfile(self.profile_manager.getCurrentProfileName())
             self.updateCountLabels()
-            logger.debug(f"onManagePicks: Added {len(new_words)} picks")
+            logger.debug(f"onManagePicks: Added {len(new_words)} picks: {new_words}")
         logger.debug("onManagePicks completed")
 
     @pyqtSlot()
@@ -608,16 +613,30 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug("onManageCandidates started")
         profile = self.profile_manager.getCurrentProfile()
         model = self.candidatesList.model().sourceModel()
-        words = sorted(model.get_candidates())
-        dialog = BatchAddDialog(self, words=words, word_length=self.word_length, title="Batch Add Candidates")
+        original_words = sorted(model.get_candidates())
+        logger.debug(f"onManageCandidates: Passing words to dialog: {original_words}")
+        dialog = BatchAddDialog(self, words=original_words, word_length=self.word_length, title="Batch Add Candidates")
         if dialog.exec():
             new_words = dialog.valid_words
             for word in new_words:
                 model.add_candidate(word)
+            for word in original_words:
+                if word not in new_words:
+                    model.remove_candidate(word)
             self.syncToProfile(self.profile_manager.getCurrentProfileName())
             self.updateCountLabels()
-            logger.debug(f"onManageCandidates: Added {len(new_words)} candidates")
+            logger.debug(f"onManageCandidates: Added {len(new_words)} candidates: {new_words}, "
+                        f"Removed {len([w for w in original_words if w not in new_words])} candidates")
         logger.debug("onManageCandidates completed")
+
+    @pyqtSlot()
+    def on_editor_closed(self):
+        self.addPickButton.setEnabled(True)
+        self.addCandidateButton.setEnabled(True)
+        self.updateCountLabels()
+        logger.debug("on_editor_closed: Re-enabled addPickButton and addCandidateButton")
+
+
 
     def spawnDecisionTreeRoutesGetter(self, pick):
         """Start a DecisionTreeRoutesGetter thread to generate a decision tree for the given pick."""
