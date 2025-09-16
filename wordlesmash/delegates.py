@@ -24,10 +24,8 @@ class PickValidator(UpperCaseValidator):
         self.profile = profile
 
     def validate(self, string, pos):
-        if string.upper() in self.profile.picks:
+        if self.profile.model._picks.get(string.upper()) is not None:
             return QValidator.State.Intermediate, string.upper(), pos
-        elif string.upper() in self.profile.candidates:
-            return QValidator.State.Acceptable, string.upper(), pos
         else:
             return super().validate(string, pos)
 
@@ -37,10 +35,12 @@ class CandidateValidator(UpperCaseValidator):
         self.profile = profile
 
     def validate(self, string, pos):
-        if string.upper() in self.profile.candidates:
+        # if string.upper() in self.profile.candidates:
+        if self.profile.model._picks.get(string.upper()) not in (None, 'candidate'):
             return QValidator.State.Intermediate, string.upper(), pos
         else:
             return super().validate(string, pos)
+
 
 
 class UpperCaseDelegate(QItemDelegate):
@@ -52,8 +52,9 @@ class UpperCaseDelegate(QItemDelegate):
         self.escape_pressed = False
         self._editor_index = {}  # Maps editor QWidget -> QModelIndex
         self._editor_original = {}  # Saves original text
-        self._editor_processed = {}  # Tracks if editor was processed
         logger.debug(f"UpperCaseDelegate initialized with word_length={word_length}")
+        # self.commitData.connect(self.on_commitData)
+        self.closeEditor.connect(self.on_closeEditor)
 
     def createEditor(self, parent, option, index):
         editor = QLineEdit(parent)
@@ -64,30 +65,29 @@ class UpperCaseDelegate(QItemDelegate):
         self._editor_index[editor] = QModelIndex(index)
         orig = index.model().data(index, Qt.ItemDataRole.EditRole) or ""
         self._editor_original[editor] = orig
-        self._editor_processed[editor] = False
         logger.debug(f"UpperCaseDelegate.createEditor: Created editor for index {index.row()}, orig='{orig}'")
         return editor
 
     def applyValidator(self, editor):
         editor.setValidator(UpperCaseValidator(self.word_length, editor))
 
-    def setEditorData(self, editor, index):
-        text = index.model().data(index, Qt.ItemDataRole.EditRole) or ""
-        editor.setText(str(text).upper())
-        logger.debug(f"UpperCaseDelegate.setEditorData: Set text '{text}' for index {index.row()}")
+    # def setEditorData(self, editor, index):
+    #     text = index.model().data(index, Qt.ItemDataRole.EditRole) or ""
+    #     editor.setText(str(text).upper())
+    #     logger.debug(f"UpperCaseDelegate.setEditorData: Set text '{text}' for index {index.row()}")
 
-    def setModelData(self, editor, model, index):
-        text = editor.text().strip().upper()
-        state = editor.validator().validate(text, 0)[0]
-        logger.debug(f"UpperCaseDelegate.setModelData: Processing text '{text}', validator state={state}, index={index.row()}")
-        if state == QValidator.State.Acceptable:
-            model.setData(index, text, Qt.ItemDataRole.EditRole)
-            logger.debug(f"UpperCaseDelegate.setModelData: Set valid text '{text}' for index {index.row()}")
-        else:
-            logger.debug(f"UpperCaseDelegate.setModelData: Skipped invalid/empty text '{text}' for index {index.row()}")
+    # def setModelData(self, editor, model, index):
+    #     text = editor.text().strip().upper()
+    #     state = editor.validator().validate(text, 0)[0]
+    #     logger.debug(f"UpperCaseDelegate.setModelData: Processing text '{text}', validator state={state}, index={index.row()}")
+    #     if state == QValidator.State.Acceptable:
+    #         model.setData(index, text, Qt.ItemDataRole.EditRole)
+    #         logger.debug(f"UpperCaseDelegate.setModelData: Set valid text '{text}' for index {index.row()}")
+    #     else:
+    #         logger.debug(f"UpperCaseDelegate.setModelData: Skipped invalid/empty text '{text}' for index {index.row()}")
 
-    def updateEditorGeometry(self, editor, option, index):
-        editor.setGeometry(option.rect)
+    # def updateEditorGeometry(self, editor, option, index):
+    #     editor.setGeometry(option.rect)
 
     def eventFilter(self, editor, event):
         if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
@@ -95,84 +95,35 @@ class UpperCaseDelegate(QItemDelegate):
             self.closeEditor.emit(editor, QAbstractItemDelegate.EndEditHint.RevertModelCache)
             logger.debug(f"UpperCaseDelegate.eventFilter: Escape pressed for editor at index {self._editor_index.get(editor, QModelIndex()).row()}")
             return True
+        elif event.type() == QEvent.Type.FocusOut and event.reason() == Qt.FocusReason.ActiveWindowFocusReason:
+            logger.debug(f"UpperCaseDelegate.eventFilter: Ignored focus out event for editor at index {self.current_index.row()}")
+            return True  # Prevent editor from closing
         return super().eventFilter(editor, event)
-
-    # def eventFilter(self, editor, event):
-    #     if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
-    #         self.escape_pressed = True
-    #         self.closeEditor.emit(editor, QAbstractItemDelegate.EndEditHint.RevertModelCache)
-    #         logger.debug(f"UpperCaseDelegate.eventFilter: Escape pressed for editor at index {self.current_index.row()}")
-    #         return True
-    #     elif event.type() == QEvent.Type.FocusOut:
-    #         logger.debug(f"UpperCaseDelegate.eventFilter: Ignored focus out event for editor at index {self.current_index.row()}")
-    #         return True  # Prevent editor from closing
-    #     return super().eventFilter(editor, event)
-
-
-    # def on_closeEditor_old(self, editor, hint):
-    #     # find index and state for this editor
-    #     idx = self._editor_index.get(editor)
-    #     committed = self._editor_committed.get(editor, False)
-    #     orig = self._editor_original.get(editor, "")
-
-    #     final = editor.text().strip()
-    #     # validate final text explicitly
-    #     state, _, _ = self._validator.validate(final, 0)
-    #     valid = (state == QValidator.State.Acceptable)
-
-    #     # If edit was not committed (Esc or cancel) and item started blank:
-    #     # remove it when final is blank OR invalid.
-    #     if idx is not None and not committed:
-    #         if (final == "") or (not valid) or (orig == '' and not editor.isModified()):
-    #             # (orig == '' and not .isModified) indicates a blank entry to start and esc was pressed
-    #             if idx.isValid():
-    #                 idx.model().removeRow(idx.row(), idx.parent())
-
-    #     # cleanup mappings (WeakKeyDictionary would clear on deletion, but pop now)
-    #     self._editor_index.pop(editor, None)
-    #     self._editor_committed.pop(editor, None)
-    #     self._editor_original.pop(editor, None)
 
     def on_closeEditor(self, editor, hint):
         logger.debug("UpperCaseDelegate.on_closeEditor: called")
-        if self._editor_processed.get(editor, False):
-            logger.debug("UpperCaseDelegate.on_closeEditor: Already processed, skipping")
-            return
         index = self._editor_index.get(editor)
         if not index or not index.isValid():
             logger.error(f"UpperCaseDelegate.on_closeEditor: Invalid index for editor")
             self._editor_index.pop(editor, None)
             self._editor_original.pop(editor, None)
-            self._editor_processed.pop(editor, None)
             return
         orig = self._editor_original.get(editor, "")
         final = editor.text().strip().upper()
         state, _, _ = editor.validator().validate(final, 0)
-        valid = state == QValidator.State.Acceptable
+        valid = state == QValidator.State.Acceptable # XXX this breaks if new pick added
         esc_on_blank = (orig == "" and hint == QAbstractItemDelegate.EndEditHint.RevertModelCache)
         logger.debug(f"UpperCaseDelegate.on_closeEditor: index={index.row()}, orig='{orig}', final='{final}', valid={valid}, esc_on_blank={esc_on_blank}, hint={hint}")
         if esc_on_blank or not valid:
             model = index.model()
             if model and 0 <= index.row() < model.rowCount():
-                model.beginRemoveRows(index.parent(), index.row(), index.row())
                 model.removeRow(index.row(), index.parent())
-                model.endRemoveRows()
                 logger.debug(f"UpperCaseDelegate.on_closeEditor: Removed row {index.row()} due to invalid/blank input")
             else:
                 logger.error(f"UpperCaseDelegate.on_closeEditor: Cannot remove row {index.row()}, model_rows={model.rowCount() if model else 'None'}")
-        self._editor_processed[editor] = True
         self._editor_index.pop(editor, None)
         self._editor_original.pop(editor, None)
-        self._editor_processed.pop(editor, None)
 
-    # def destroyEditor(self, editor, hint):
-    #     # Remove no longer used per-editor references
-    #     try:
-    #         self._editor_index.pop(editor, None)
-    #         self._editor_original.pop(editor, None)
-    #     except Exception:
-    #         pass
-    #     super().destroyEditor(editor, hint)
 
 class PicksDelegate(UpperCaseDelegate):
 

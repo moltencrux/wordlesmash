@@ -119,6 +119,15 @@ class ProfileManager(QObject):
     def app_cache_path(self) -> str:
         return str(self._app_cache_path)
 
+    @pyqtSlot(str)
+    def changeGameType(self, game_type:str):
+        # profile = self.loadProfile(self.current_profile)
+        profile = self.modifyProfile(self.current_profile)
+        profile.game_type = GameType(game_type)
+        profile.dirty = True # XXX probably not sufficient. 
+        # Change in game type may invalidate all existing decision trees, but
+        # ignore for now
+        
     def loadProfile(self, name: str) -> Profile:
         if name in self.modified:
             logger.debug(f"Loading modified profile: {name}")

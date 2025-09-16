@@ -48,22 +48,18 @@ class MainPreferences(QDialog, Ui_preferences):
         self.copyProfileButton.clicked.connect(self.copyProfile)
         self.removeTreeButton.clicked.connect(self.removeDecisionTree)
         self.exploreTreeButton.clicked.connect(self.exploreTree)
-        self.manageCandidatesDialog = BatchAddDialog(self)
-        self.managePicksDialog = BatchAddDialog(self)
-        self.manageCandidatesButton.clicked.connect(self.manageCandidatesDialog.show)
-        self.managePicksButton.clicked.connect(self.managePicksDialog.show)
+        self.manageCandidatesDialog = BatchAddDialog(self, word_length=self.word_length, title="Batch Add Candidates")
+        self.managePicksDialog = BatchAddDialog(self, word_length=self.word_length, title="Batch Add Picks")
+        self.manageCandidatesButton.clicked.connect(self.onManageCandidates)
+        self.managePicksButton.clicked.connect(self.onManagePicks)
         delegate_initial = UpperCaseDelegate(self.word_length, self.profile_manager.getCurrentProfile(), self.initialPicksList)
         delegate_initial.closeEditor.connect(self.onCloseInitPicksEditor)
         self.initialPicksList.setItemDelegate(delegate_initial)
-        # self.picks_model = None # PicksModel()
-        # self.picks_proxy = CandidatesProxy()
-        # self.picks_proxy.setSourceModel(self.picks_model)
-        # self.picksList.setModel(self.picks_model)
         delegate_picks = PicksDelegate(self.word_length, self.profile_manager.getCurrentProfile(), self.picksList)
-        delegate_picks.closeEditor.connect(self.onClosePicksEditor)
+        # delegate_picks.closeEditor.connect(self.onClosePicksEditor)
         self.picksList.setItemDelegate(delegate_picks)
         delegate_candidates = CandidatesDelegate(self.word_length, self.profile_manager.getCurrentProfile(), self.candidatesList)
-        delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
+        # delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
         self.candidatesList.setItemDelegate(delegate_candidates)
         # Initialize chartTreeButton as disabled
         self.chartTreeButton.setEnabled(False)
@@ -82,13 +78,6 @@ class MainPreferences(QDialog, Ui_preferences):
         self.treeWidget.setItemDelegateForColumn(0, delegate)
         self.treeWidget.setIndentation(35)
         logger.debug("MainPreferences.initUI completed")
-
-    def connectProfileSignals(self):
-        profile = self.profile_manager.getCurrentProfile()
-        profile.model.x
-
-        # self.picks_proxy.setSourceModel(self.picks_model)
-        # self.picksList.setModel(self.picks_model)
 
     def keyPressEvent(self, event):
         logger.debug(f"MainPreferences.keyPressEvent: key={event.key()}, focusWidget={self.focusWidget()}")
@@ -256,8 +245,6 @@ class MainPreferences(QDialog, Ui_preferences):
             logger.debug(f"Added '{word}' to profile.initial_picks")
         self.updateCountLabels()
 
-
-
     def loadSettings(self):
         logger.debug("MainPreferences.loadSettings started")
         self.populateProfiles()
@@ -338,10 +325,10 @@ class MainPreferences(QDialog, Ui_preferences):
         delegate_initial.closeEditor.connect(self.onCloseInitPicksEditor)
         self.initialPicksList.setItemDelegate(delegate_initial)
         delegate_picks = PicksDelegate(self.word_length, profile, self.picksList)
-        delegate_picks.closeEditor.connect(self.onClosePicksEditor)
+        # delegate_picks.closeEditor.connect(self.onClosePicksEditor)
         self.picksList.setItemDelegate(delegate_picks)
         delegate_candidates = CandidatesDelegate(self.word_length, profile, self.candidatesList)
-        delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
+        # delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
         self.candidatesList.setItemDelegate(delegate_candidates)
         logger.debug("updateDelegates completed")
 
@@ -388,23 +375,23 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug(f"validateInitialPick passed: text='{text}'")
         return True
 
-    @pyqtSlot(QListWidgetItem)
-    def validatePick(self, item):
-        text = item.strip().upper()
-        if len(text) != self.word_length or not text.isalpha():
-            logger.debug(f"validatePick failed: text='{text}'")
-            return False
-        logger.debug(f"validatePick passed: text='{text}'")
-        return True
+    # @pyqtSlot(QListWidgetItem)
+    # def validatePick(self, item):
+    #     text = item.strip().upper()
+    #     if len(text) != self.word_length or not text.isalpha():
+    #         logger.debug(f"validatePick failed: text='{text}'")
+    #         return False
+    #     logger.debug(f"validatePick passed: text='{text}'")
+    #     return True
 
-    @pyqtSlot(QListWidgetItem)
-    def validateCandidate(self, item):
-        text = item.strip().upper()
-        if len(text) != self.word_length or not text.isalpha():
-            logger.debug(f"validateCandidate failed: text='{text}'")
-            return False
-        logger.debug(f"validateCandidate passed: text='{text}'")
-        return True
+    # @pyqtSlot(QListWidgetItem)
+    # def validateCandidate(self, item):
+    #     text = item.strip().upper()
+    #     if len(text) != self.word_length or not text.isalpha():
+    #         logger.debug(f"validateCandidate failed: text='{text}'")
+    #         return False
+    #     logger.debug(f"validateCandidate passed: text='{text}'")
+    #     return True
 
     @pyqtSlot()
     def removePick(self):
@@ -471,18 +458,6 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug(f"addPick: model.rowCount={model.rowCount()}")
         logger.debug("addPick completed")
 
-
-    @pyqtSlot(QModelIndex, int, int)
-    def pickAdded(self, parent: QModelIndex, start: int, end: int):
-        for row in range(start, end + 1):
-            item = self.picksList.item(row)
-            if item is None:
-                continue
-            else:
-                ...
-            text = item.text()
-
-
     def addCandidate(self):
         logger.debug("addCandidate started")
         candidates_proxy = self.candidatesList.model()
@@ -507,7 +482,6 @@ class MainPreferences(QDialog, Ui_preferences):
         self.addCandidateButton.setEnabled(False)
         logger.debug(f"addCandidate: candidatesList rowCount={self.candidatesList.model().rowCount()}")
         logger.debug("addCandidate completed")
-
 
     @pyqtSlot()
     def removeInitialPick(self):
@@ -545,7 +519,6 @@ class MainPreferences(QDialog, Ui_preferences):
             else:
                 logger.error(f"removeCandidate: Invalid source_row {source_row}, model_rows={self.picks_model.rowCount()}")
         logger.debug("removeCandidate completed")
-
 
     @pyqtSlot()
     def addProfile(self):
@@ -613,85 +586,38 @@ class MainPreferences(QDialog, Ui_preferences):
         self.addInitialPickButton.setEnabled(True)
         logger.debug("onCloseInitPicksEditor completed")
 
-    @pyqtSlot("QWidget*", QItemDelegate.EndEditHint)
-    def onClosePicksEditor(self, editor, hint):
-        logger.debug(f"onClosePicksEditor started, hint={hint}")
-        delegate = self.sender()
-        if isinstance(delegate, PicksDelegate) and delegate.current_index.isValid():
-            index = delegate.current_index
-            model = index.model()
-            item_text = model.data(index, Qt.ItemDataRole.EditRole) or ""
-            logger.debug(f"onClosePicksEditor: item_text='{item_text}', escape_pressed={delegate.escape_pressed}, index_valid={index.isValid()}")
-            model.setData(index, False, ROLE_IS_EDITING)
-            # Delegate ensures only valid entries reach here
-            self.updateCountLabels()
+
+    @pyqtSlot()
+    def onManagePicks(self):
+        logger.debug("onManagePicks started")
+        profile = self.profile_manager.getCurrentProfile()
+        model = self.picksList.model().sourceModel()
+        words = sorted(model.get_picks())
+        dialog = BatchAddDialog(self, words=words, word_length=self.word_length, title="Batch Add Picks")
+        if dialog.exec():
+            new_words = dialog.valid_words
+            for word in new_words:
+                model.add_pick(word)
             self.syncToProfile(self.profile_manager.getCurrentProfileName())
-        self.addPickButton.setEnabled(True)
-        logger.debug("onClosePicksEditor completed")
-
-    @pyqtSlot("QWidget*", QItemDelegate.EndEditHint)
-    def onCloseCandidatesEditor(self, editor, hint):
-        logger.debug(f"onCloseCandidatesEditor started, hint={hint}")
-        delegate = self.sender()
-        if not isinstance(delegate, CandidatesDelegate) or not delegate.current_index.isValid():
-            logger.error("onCloseCandidatesEditor: Invalid delegate or index")
-            self.addCandidateButton.setEnabled(True)
-            return
-        index = delegate.current_index
-        source_index = self.picks_proxy.mapToSource(index)
-        if not source_index.isValid():
-            logger.error(f"onCloseCandidatesEditor: Invalid source_index for proxy_index={index.row()}, proxy_rows={self.picks_proxy.rowCount()}")
-            self.addCandidateButton.setEnabled(True)
-            return
-        model = source_index.model()
-        if not model:
-            logger.error("onCloseCandidatesEditor: No model associated with source_index")
-            self.addCandidateButton.setEnabled(True)
-            return
-        item_text = model.data(source_index, Qt.ItemDataRole.EditRole) or ""
-        logger.debug(f"onCloseCandidatesEditor: item_text='{item_text}', escape_pressed={delegate.escape_pressed}, source_row={source_index.row()}, model_rows={model.rowCount()}")
-        model.setData(source_index, False, ROLE_IS_EDITING)
-        # Delegate ensures only valid entries reach here
-        if item_text.strip():
-            existing_idx = model._index_of_text(item_text)
-            if existing_idx != -1 and existing_idx != source_index.row():
-                model._items[existing_idx]['is_candidate'] = True
-                model.dataChanged.emit(model.index(existing_idx, 0), model.index(existing_idx, 0), [ROLE_IS_CANDIDATE])
-                if 0 <= source_index.row() < model.rowCount():
-                    success = model.remove_pick_by_row(source_index.row())
-                    if success:
-                        logger.debug(f"onCloseCandidatesEditor: Merged duplicate candidate '{item_text}' at index {existing_idx}")
-                    else:
-                        logger.error(f"onCloseCandidatesEditor: Failed to remove duplicate row {source_index.row()} for item '{item_text}'")
-                else:
-                    logger.error(f"onCloseCandidatesEditor: Invalid row {source_index.row()} for duplicate merge, model_rows={model.rowCount()}")
-            # Ensure candidate is also a pick
-            if item_text not in self.picks_model.get_picks():
-                logger.debug(f"onCloseCandidatesEditor: Adding '{item_text}' to picks to maintain subset invariant")
-                self.picks_model.add_pick(item_text)
-        self.addCandidateButton.setEnabled(True)
-        self.updateCountLabels()
-        self.syncToProfile(self.profile_manager.getCurrentProfileName())
-        logger.debug("onCloseCandidatesEditor completed")
-
-    @pyqtSlot("QWidget*", QItemDelegate.EndEditHint)
-    def onCloseEditor(self, editor, hint):
-        logger.debug(f"onCloseEditor started, hint={hint}")
-        delegate = self.sender()
-        list_widget = delegate.parent()
-        if isinstance(delegate, UpperCaseDelegate) and delegate.current_index.isValid():
-            index = delegate.current_index
-            model = index.model()
-            item_text = model.data(index, Qt.ItemDataRole.EditRole) or ""
-            logger.debug(f"onCloseEditor: item_text='{item_text}', escape_pressed={delegate.escape_pressed}")
-            if delegate.escape_pressed or not item_text.strip():
-                success = model.removeRow(index.row())
-                if success:
-                    logger.debug(f"onCloseEditor: Removed item '{item_text}' at index {index.row()} (escape={delegate.escape_pressed})")
-                else:
-                    logger.error(f"onCloseEditor: Failed to remove row {index.row()} for item '{item_text}'")
             self.updateCountLabels()
-        logger.debug("onCloseEditor completed")
+            logger.debug(f"onManagePicks: Added {len(new_words)} picks")
+        logger.debug("onManagePicks completed")
+
+    @pyqtSlot()
+    def onManageCandidates(self):
+        logger.debug("onManageCandidates started")
+        profile = self.profile_manager.getCurrentProfile()
+        model = self.candidatesList.model().sourceModel()
+        words = sorted(model.get_candidates())
+        dialog = BatchAddDialog(self, words=words, word_length=self.word_length, title="Batch Add Candidates")
+        if dialog.exec():
+            new_words = dialog.valid_words
+            for word in new_words:
+                model.add_candidate(word)
+            self.syncToProfile(self.profile_manager.getCurrentProfileName())
+            self.updateCountLabels()
+            logger.debug(f"onManageCandidates: Added {len(new_words)} candidates")
+        logger.debug("onManageCandidates completed")
 
     def spawnDecisionTreeRoutesGetter(self, pick):
         """Start a DecisionTreeRoutesGetter thread to generate a decision tree for the given pick."""

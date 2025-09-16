@@ -1,9 +1,10 @@
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
-from PyQt6.QtWidgets import QDialog
-from PyQt6.QtGui import QCloseEvent
+from PyQt6.QtWidgets import QDialog, QMessageBox
+from PyQt6.QtGui import QCloseEvent, QTextCursor
 from .ui_loader import load_ui_class, UI_CLASSES
 import logging
 from itertools import cycle
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +28,12 @@ class NewProfileDialog(QDialog, Ui_NewProfile):
         super().accept()
 
 class BatchAddDialog(QDialog, Ui_BatchAdd):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, words: list = None, word_length: int = 5, title: str = "Batch Add Words"):
         super().__init__(parent)
+        self.words = words or []
+        self.word_length = word_length
         self.initUI()
+        self.setWindowTitle(title)
 
     def initUI(self):
         self.setupUi(self)
@@ -42,47 +46,39 @@ class BatchAddDialog(QDialog, Ui_BatchAdd):
 
     def populateWords(self):
         self.addWordsEdit.clear()
-        parent = self.parent()
-        if hasattr(parent, 'picksList') and self in (parent.managePicksDialog, parent.manageCandidatesDialog):
-            target_list = parent.picksList if self is parent.managePicksDialog else parent.candidatesList
-            words = [target_list.item(i).text() for i in range(target_list.count()) if target_list.item(i).text().strip()]
-            self.addWordsEdit.setPlainText('\n'.join(words))
-            self.addWordsEdit.moveCursor(QTextCursor.MoveOperation.End)
+        words = sorted(self.words)
+        self.addWordsEdit.setPlainText('\n'.join(words))
+        self.addWordsEdit.moveCursor(QTextCursor.MoveOperation.End)
+        logger.debug(f"populateWords: Loaded {len(words)} words into addWordsEdit")
 
     def formatText(self):
         text = self.addWordsEdit.toPlainText()
-        words = {word.upper() for word in re.findall(r'[a-zA-Z]+', text)}
+        words = {word.upper() for word in re.findall(r'[a-zA-Z]+', text) if len(word) == self.word_length and word.isalpha()}
         new_text = '\n'.join(sorted(words)) + '\n'
         self.addWordsEdit.setPlainText(new_text)
         self.addWordsEdit.moveCursor(QTextCursor.MoveOperation.End)
+        logger.debug(f"formatText: Formatted {len(words)} valid words")
+
+    @staticmethod
+    def all_strings_via_api(model, role=Qt.ItemDataRole.EditRole):
+        strings = set()
+        for row in range(model.rowCount()):
+            idx = model.index(row, 0)
+            value = model.data(idx, role)
+            if value is not None:
+                strings.add(str(value))
+        return strings
 
     def accept(self):
         self.formatText()
         text = self.addWordsEdit.toPlainText()
         words = [word.strip().upper() for word in text.split("\n") if word.strip()]
-        parent = self.parent()
-        if words and hasattr(parent, 'picksList') and self in (parent.managePicksDialog, parent.manageCandidatesDialog):
-            profile = parent.profile_manager.modifyProfile(parent.profile_manager.getCurrentProfile())
-            target_list = parent.picksList if self is parent.managePicksDialog else parent.candidatesList
-            target_list.clear()
-            if self is parent.manageCandidatesDialog:
-                legal_picks = set(profile.picks)
-                for word in words:
-                    if len(word) == parent.word_length and word.isalpha() and word not in legal_picks:
-                        parent.picksList.addItem(word)
-                        profile.picks.append(word)
-                        profile.dirty = True
-            for word in words:
-                if len(word) == parent.word_length and word.isalpha():
-                    target_list.addItem(word)
-                    if self is parent.managePicksDialog and word not in profile.picks:
-                        profile.picks.append(word)
-                        profile.dirty = True
-                    elif self is parent.manageCandidatesDialog and word not in profile.candidates:
-                        profile.candidates.append(word)
-                        profile.dirty = True
-            parent.updateCountLabels()
-            parent.is_modified = True
+        valid_words = [word for word in words if len(word) == self.word_length and word.isalpha()]
+        if not valid_words:
+            QMessageBox.warning(self, "Invalid Input", f"All words must be exactly {self.word_length} alphabetic characters.")
+            return
+        logger.debug(f"BatchAddDialog.accept: Returning {len(valid_words)} valid words")
+        self.valid_words = valid_words  # Store for parent to access
         super().accept()
 
 
@@ -129,7 +125,7 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
                 logger.error(f"Error executing cancel_callback: {e}")
 
     def keyPressEvent(self, event):
-        logger.debug(f"ProgressDialog keyPressEvent: key={event.key()}, focusWidget={self.focusWidget()}, flags={self.windowFlags()}")
+        logger.debug(f"ProgressDialog keyPressEvent: key={event.key()}, focusWidget={self.focusWidget()}")
         if event.key() == Qt.Key.Key_Escape:
             logger.debug("Esc key press in ProgressDialog, triggering onCancelRequested")
             self.onCancelRequested()
@@ -138,7 +134,6 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
         super().keyPressEvent(event)
 
     def closeEvent(self, event: QCloseEvent):
-        """Stop the timer and spinner before closing the dialog."""
         logger.debug("ProgressDialog closeEvent triggered")
         self.timer.stop()
         logger.debug("ProgressDialog timer stopped")
@@ -147,5 +142,4 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
             logger.debug("ProgressDialog spinner stopped")
         except AttributeError as e:
             logger.error(f"ProgressDialog spinner not properly initialized: {e}")
-        logger.debug("ProgressDialog cancelButton signal disconnected")
         super().closeEvent(event)
