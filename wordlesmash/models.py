@@ -10,12 +10,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 class PicksModel(QAbstractListModel):
-    def __init__(self, picks={}):
+    def __init__(self, picks=None):
         super().__init__()
-        if not isinstance(picks, dict):
-            raise ValueError('Picks must be of type dict')
-        self._picks = picks # a dictionary keyed by picks/canididates, keyed by words and 'pick' or 'candidate' values
-        self._items = list(picks.keys())
+        if not isinstance(picks, (dict, type(None))):
+            raise ValueError('Picks must be of type dict or None')
+        self._picks = picks if picks is not None else {} # a dictionary keyed by picks/canididates, keyed by words and 'pick' or 'candidate' values
+        self._items = list(self._picks.keys())
         self._new_item_type = None
         self._empty_row = None
         logger.debug(f"PicksModel initialized with {len(self._items)} items")
