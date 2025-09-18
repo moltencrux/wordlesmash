@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
     QItemDelegate, QListWidgetItem, QMessageBox, QTreeWidgetItem, QListView
 )
 import logging
+from typing import List, Any
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,79 @@ class PicksModel(QAbstractListModel):
                 return True
 
         return False
+
+    def batch_add_picks(self, words: List[str], is_candidate: bool = False):
+        """Add multiple picks or candidates in one operation."""
+        valid_words = {word.upper() for word in words}
+        if not valid_words:
+            logger.debug("batch_add_picks: No valid words to add")
+            return
+        new_words = valid_words - self._picks.keys()
+        if not new_words:
+            logger.debug("batch_add_picks: All words are duplicates")
+            return
+        row_start = self.rowCount()
+        row_end = row_start + len(new_words) - 1
+
+        self.beginInsertRows(QModelIndex(), row_start, row_end)
+        self._items.extend(new_words)
+        for word in new_words:
+            self._picks.setdefault(word, 'candidate')
+        self.endInsertRows()
+
+        logger.debug(f"batch_add_picks: Added {len(new_words)} {'candidates' if is_candidate else 'picks'} from row {row_start} to {row_end}")
+
+
+    def make_batch_finder(self):
+
+        def finder(target: Any, cache={}) -> int:
+            if target in cache:
+                return cache[target]
+            for i in range(len(cache), len(self._items)):
+                found  = self._items[i]
+                cache[found] = i
+                if found == terget:
+                    return i
+            return -1
+
+        return finder
+
+    def batch_add_candidates(self, words: List[str]):
+        """Mark existing picks as candidates and add new candidates in one operation."""
+        valid_words = {word.upper() for word in words}
+        if not valid_words:
+            logger.debug("batch_add_candidates: No valid words to add")
+            return
+        existing = set(self._picks.keys())
+
+        new_words = valid_words - self._picks.keys()
+
+        updated_rows = []
+
+        find = self.make_batch_finder()
+
+        for word in valid_words - new_words:
+            if self._picks[word] != 'candidate':
+                self._picks[word] = 'candidate'
+
+                row = find(word)
+                if row != -1:
+                    updated_rows.append(row)
+        if new_words:
+            row_start = self.rowCount()
+            row_end = row_start + len(new_words) - 1
+            self.beginInsertRows(QModelIndex(), row_start, row_end)
+            self._items.extend(new_words)
+            for word in new_words:
+                self._picks[word] = 'candidate'
+            self.endInsertRows()
+            logger.debug(f"batch_add_candidates: Added {len(new_words)} new candidates from row {row_start} to {row_end}")
+        if updated_rows:
+            # updated_rows.sort()
+            start_idx = self.index(updated_rows[0])
+            end_idx = self.index(updated_rows[-1])
+            self.dataChanged.emit(start_idx, end_idx, [Qt.ItemDataRole.UserRole])
+            logger.debug(f"batch_add_candidates: Updated {len(updated_rows)} existing picks to candidates")
 
     def _row_of_text(self, text):
         if text != '':

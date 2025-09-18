@@ -163,17 +163,15 @@ class ProfileManager(QObject):
         candidates_file = profile_dir / "candidates.txt"
         if candidates_file.exists():
             with candidates_file.open("r", encoding="utf-8") as f:
-                for line in f:
-                    profile.model.add_candidate(line.strip().upper())
-                #profile.candidates = {line.strip().upper() for line in f if line.strip()}
+                candidates = [line.strip().upper() for line in f]
+            profile.model.batch_add_candidates(candidates)
 
         # Load picks from picks.txt
         picks_file = profile_dir / "picks.txt"
         if picks_file.exists():
             with picks_file.open("r", encoding="utf-8") as f:
-                for line in f:
-                    profile.model.add_pick(line.strip().upper())
-                    # XXX check that this does not mark profile as modified
+                picks = [line.strip().upper() for line in f]
+            profile.model.batch_add_picks(picks)
 
         # Load decision trees
         if profile_dir.exists():
