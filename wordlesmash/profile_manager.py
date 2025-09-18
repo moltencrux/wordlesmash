@@ -9,6 +9,7 @@ import logging
 import shutil
 from weakref import WeakKeyDictionary, WeakValueDictionary
 from typing import List
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,9 @@ class ProfileManager(QObject):
         self._prev_profile = None
         self.reset()
 
-    @pyqtSlot(QModelIndex, QModelIndex, 'QList<int>')  # seems broken for now
+    @pyqtSlot(QModelIndex, QModelIndex, 'QList<int>')
     def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles):
-        logger.debug("on_data_changed", topLeft, bottomRight, list('roles'))
+        logger.debug(f"on_data_changed: {topLeft}, {bottomRight}, {list(roles)}")
         sender = self.sender()
         name = self._profile_name_by_model.get(sender)
         if name:
@@ -120,14 +121,12 @@ class ProfileManager(QObject):
         return str(self._app_cache_path)
 
     @pyqtSlot(str)
-    def changeGameType(self, game_type:str):
+    def changeGameType(self, game_type: str):
         # profile = self.loadProfile(self.current_profile)
         profile = self.modifyProfile(self.current_profile)
         profile.game_type = GameType(game_type)
-        profile.dirty = True # XXX probably not sufficient. 
-        # Change in game type may invalidate all existing decision trees, but
-        # ignore for now
-        
+        profile.dirty = True
+
     def loadProfile(self, name: str) -> Profile:
         if name in self.modified:
             logger.debug(f"Loading modified profile: {name}")
@@ -159,21 +158,22 @@ class ProfileManager(QObject):
         profile.dt = {}
         profile_dir = self.app_data_path / "profiles" / name
 
+        start = time.time()
         # Load candidates from candidates.txt
         candidates_file = profile_dir / "candidates.txt"
         if candidates_file.exists():
             with candidates_file.open("r", encoding="utf-8") as f:
-                for line in f:
-                    profile.model.add_candidate(line.strip().upper())
-                #profile.candidates = {line.strip().upper() for line in f if line.strip()}
+                candidates = sorted(line.strip().upper() for line in f if line.strip())  # Pre-sort
+            profile.model.batch_add_candidates(candidates)
+            logger.debug(f"Loaded {len(candidates)} candidates for profile '{name}'")
 
         # Load picks from picks.txt
         picks_file = profile_dir / "picks.txt"
         if picks_file.exists():
             with picks_file.open("r", encoding="utf-8") as f:
-                for line in f:
-                    profile.model.add_pick(line.strip().upper())
-                    # XXX check that this does not mark profile as modified
+                picks = sorted(line.strip().upper() for line in f if line.strip())  # Pre-sort
+            profile.model.batch_add_picks(picks)
+            logger.debug(f"Loaded {len(picks)} picks for profile '{name}'")
 
         # Load decision trees
         if profile_dir.exists():
@@ -190,6 +190,7 @@ class ProfileManager(QObject):
         profile.model.dataChanged.connect(self.on_data_changed)
         profile.model.rowsInserted.connect(self.on_rows_changed)
         profile.model.rowsRemoved.connect(self.on_rows_changed)
+        logger.debug(f"loadProfile: Loaded profile '{name}' in {time.time() - start:.2f} seconds")
         return profile
 
     @pyqtSlot(QModelIndex, int, int)
@@ -284,10 +285,11 @@ class ProfileManager(QObject):
             #     del self.modified[name]
             # if name in self.loaded: # anyway, they should have been popped already
             #     del self.loaded[name]
+            self._profile_names.discard(name)
         self.to_delete.clear()
         logger.debug("All marked profiles deleted")
 
-    def renameProfile(prev_name, name):
+    def renameProfile(self, prev_name, name):
         if prev_name == name:
             return
 
@@ -295,14 +297,11 @@ class ProfileManager(QObject):
         if profile.saved_name and profile.saved_name != name:
             self.to_delete.add(profile.saved_name)
         else:
-            # profile's original name was restored, cancel deletion
-            self.to_delete.remove(profile.saved_name)
-
+            self.to_delete.discard(profile.saved_name)
         if prev_name in self.loaded:
             self.loaded.pop(prev_name)
         elif prev_name in self.modified:
-            self.loaded.pop(prev_name)
-
+            self.modified.pop(prev_name)
         self.modified[name] = profile
 
         return profile
@@ -311,19 +310,18 @@ class ProfileManager(QObject):
         logger.debug(f"modifyProfile called for name: {name}, new_name: {new_name}")
         profile = self.loadProfile(name)
         if new_name and new_name != name:
+            self._profile_names.discard(name)
             if new_name != profile.saved_name:
                 self.to_delete.add(profile.saved_name)
             else:
-                self.to_delete.remove(profile.saved_name)
-
-            if new_name != self._default_profile:
-                self._default_profile = new_name
+                self.to_delete.discard(profile.saved_name)
+            if self.getDefaultProfile() == name:
+                self.setDefaultProfile(new_name)
                 logger.debug(f"Default profile renamed from {name} to {new_name}")
         else:
             # this is not a rename
             new_name = name
-            self.loaded.pop(name, None)
-
+        self.loaded.pop(name, None)
         self.modified[new_name] = profile
         profile.dirty = True # necessary still?
         return profile
@@ -356,7 +354,7 @@ class ProfileManager(QObject):
         """Check if there are any pending changes to profiles or default profile."""
         current_default = self.settings.value("default_profile", defaultValue=None)
         default_changed = self._default_profile != current_default
-        return bool(self.modified or self.to_delete or default_changed or 
+        return bool(self.modified or self.to_delete or default_changed or
                     any(profile.pending_dt_changes["added"] or
                         profile.pending_dt_changes["deleted"]
                         for profile in self.modified.values()))
@@ -365,6 +363,7 @@ class ProfileManager(QObject):
         """Save all modified profiles, process deletions, and update default profile."""
         logger.debug("Committing changes in ProfileManager")
         self.processDeletions()  # Process pending deletions
+        self._profile_names.update(self.modified.keys())
         for name, profile in self.modified.items():
             if profile.dirty:
                 logger.debug(f"Saving profile: {name}, initial_picks: {profile.initial_picks}")

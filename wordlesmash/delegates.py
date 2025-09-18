@@ -40,7 +40,7 @@ class PickValidator(UpperCaseValidator):
         if string in self.cache:
             logger.debug(f"PickValidator: Returning cached Acceptable for '{string}'")
             return QValidator.State.Acceptable, string, pos
-        elif self.profile.model._picks.get(string) is not None:
+        elif self.profile.model._items.get(string) is not None:
             return QValidator.State.Intermediate, string, pos
 
         return super().validate(string, pos)
@@ -57,8 +57,8 @@ class CandidateValidator(UpperCaseValidator):
         if string in self.cache:
             logger.debug(f"CandidateValidator: Returning cached Acceptable for '{string}'")
             return QValidator.State.Acceptable, string, pos
-        elif string and self.profile.model._picks.get(string) not in (None, 'candidate'):
-            logger.debug(f"CandidateValidator: '{string}' is a pick but not a candidate")
+        elif string and self.profile.model._items.get(string) ==  'candidate':
+            logger.debug(f"CandidateValidator: '{string}' is a candidate")
             return QValidator.State.Intermediate, string, pos
 
         return super().validate(string, pos)
