@@ -12,6 +12,7 @@ from .wordle_game import Color
 from .workers import DecisionTreeRoutesGetter
 from .models import PicksModel, CandidatesProxy, AlphabeticProxy
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug("MainPreferences.__init__ completed")
 
     def initUI(self):
+        start = time.time()
         self.setupUi(self)
         logger.debug(f"initUI: QComboBox item count before clear: {self.profileComboBox.count()}")
         self.profileComboBox.clear()
@@ -52,16 +54,18 @@ class MainPreferences(QDialog, Ui_preferences):
         self.managePicksDialog = BatchAddDialog(self, word_length=self.word_length, title="Batch Add Picks")
         self.manageCandidatesButton.clicked.connect(self.onManageCandidates)
         self.managePicksButton.clicked.connect(self.onManagePicks)
-        # Set delegates and connect editor signals
-        delegate_initial = UpperCaseDelegate(self.word_length, self.profile_manager.getCurrentProfile(), self.initialPicksList)
-        delegate_initial.closeEditor.connect(self.onCloseInitPicksEditor)
-        self.initialPicksList.setItemDelegate(delegate_initial)
-        delegate_picks = PicksDelegate(self.word_length, self.profile_manager.getCurrentProfile(), self.picksList)
-        # delegate_picks.closeEditor.connect(self.onClosePicksEditor)
-        self.picksList.setItemDelegate(delegate_picks)
-        delegate_candidates = CandidatesDelegate(self.word_length, self.profile_manager.getCurrentProfile(), self.candidatesList)
-        # delegate_candidates.closeEditor.connect(self.onCloseCandidatesEditor)
-        self.candidatesList.setItemDelegate(delegate_candidates)
+        profile = self.profile_manager.getCurrentProfile()
+        self.picksList.blockSignals(True)
+        self.candidatesList.blockSignals(True)
+        self.picksList.setItemDelegate(PicksDelegate(self.word_length, profile, self.picksList))
+        self.candidatesList.setItemDelegate(CandidatesDelegate(self.word_length, profile, self.candidatesList))
+        self.picksList.setModel(profile.model)
+        # self.candidatesList.setModel(profile.candidates_proxy)
+        self.picksList.itemDelegate().closeEditor.connect(self.on_editor_closed)
+        self.candidatesList.itemDelegate().closeEditor.connect(self.on_editor_closed)
+        self.picksList.blockSignals(False)
+        self.candidatesList.blockSignals(False)
+
         # Initialize chartTreeButton as disabled
         self.chartTreeButton.setEnabled(False)
         self.initialPicksList.itemSelectionChanged.connect(self.onInitialPicksListSelectionChanged)
@@ -97,6 +101,9 @@ class MainPreferences(QDialog, Ui_preferences):
     def syncToProfile(self, profile_name: str) -> None:
         logger.debug(f"syncToProfile: profile_name={profile_name}")
         profile = self.profile_manager.modifyProfile(profile_name)
+        # XXX why do we do this? would it not already be synced?
+        # Actually, nothing happes on add ex adding to list, so sth needs to happpen
+        # but maybe the model should be linked, synced or sth.
         profile.initial_picks = {self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count()) if self.initialPicksList.item(i).text().strip()}
         # profile.picks = self.picksList.model().get_picks()
         # profile.candidates = self.candidatesList.model().get_candidates()
@@ -288,12 +295,12 @@ class MainPreferences(QDialog, Ui_preferences):
                 item = QListWidgetItem(pick)
                 self.initialPicksList.addItem(item)
                 logger.debug(f"Added initial pick: '{pick}'")
-        picks_proxy = AlphabeticProxy()
-        picks_proxy.setSourceModel(profile.model)
+        # picks_proxy = AlphabeticProxy()
+        # picks_proxy.setSourceModel(profile.model)
         candidates_proxy = CandidatesProxy()
         candidates_proxy.setSourceModel(profile.model)
         self.candidatesList.setModel(candidates_proxy)
-        self.picksList.setModel(picks_proxy)
+        self.picksList.setModel(profile.model) # no proxy for picks
         self.decisionTreeList.clear()
         for pick in profile.dt:
             self.decisionTreeList.addItem(pick)
@@ -350,14 +357,15 @@ class MainPreferences(QDialog, Ui_preferences):
 
             # profile.picks = self.picksList.model().get_picks()
             # profile.candidates = self.candidatesList.model().get_candidates()
-            profile.initial_picks = [self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count())]
+            ###profile.initial_picks = [self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count())]
             profile.dirty = True
-            profile.words_modified = True
-            self.populateProfiles()
+            profile.words_modified = True # necessary? maybe.. but shouldn't always need to recalc dtrees
+            self.populateProfiles() # XXX does this incorporate the newly named one?
             index = self.profileComboBox.findData(new_name, Qt.ItemDataRole.UserRole)
             if index >= 0:
                 self.profileComboBox.setCurrentIndex(index)
-                self.profile_manager.setCurrentProfile(new_name)
+                self.profile_manager.setCurrentProfile(new_name) # XXX i feel this is not enough
+                # i think the profile maanger shoudl take some real aciton here. verify later
         logger.debug("renameProfile completed")
 
     @pyqtSlot()
@@ -446,39 +454,48 @@ class MainPreferences(QDialog, Ui_preferences):
     @pyqtSlot()
     def addPick(self):
         logger.debug("addPick started")
-        # profile = self.profile_manager.getCurrentProfile()
-        picks_proxy = self.picksList.model()
-        model = picks_proxy.sourceModel()
+        model = self.picksList.model()
         new_model_index = model.add_pick()
-        proxy_index = self.picksList.model().mapFromSource(new_model_index)
-        self.picksList.setCurrentIndex(proxy_index)
-        self.picksList.scrollTo(proxy_index, QListView.ScrollHint.PositionAtBottom)
+        self.picksList.setCurrentIndex(new_model_index)
+        self.picksList.scrollTo(new_model_index, QListView.ScrollHint.PositionAtBottom)
 
         try:
-            self.picksList.edit(proxy_index)
+            self.picksList.edit(new_model_index)
         except Exception as e:
             logger.error(f"Failed to enter edit mode for picksList: {e}")
         self.addPickButton.setEnabled(False)
         logger.debug(f"addPick: model.rowCount={model.rowCount()}")
         logger.debug("addPick completed")
 
-    def addCandidate(self):
-        logger.debug("addCandidate started")
-        candidates_proxy = self.candidatesList.model()
-        model = candidates_proxy.sourceModel()
-        new_model_index = model.add_candidate()
 
+
+
+        # def onAddCandidate(self):
+        #     index = self.profile.model.add_candidate(proxy=self.profile.candidates_proxy)
+        #     logger.debug(f"onAddCandidate: Added candidate at proxy index={index.row()}")
+        #     self.candidatesList.edit(index)
+
+    def addCandidate(self):
+        #     index = self.profile.model.add_candidate(proxy=self.profile.candidates_proxy)
+        #     logger.debug(f"onAddCandidate: Added candidate at proxy index={index.row()}")
+        #     self.candidatesList.edit(index)
+
+        logger.debug("addCandidate started")
+
+        candidates_proxy = self.candidatesList.model()
         if not isinstance(candidates_proxy, CandidatesProxy):
             logger.error("addCandidate: candidatesList model is not CandidatesProxy")
-            candidates_proxy = CandidatesProxy()
-            candidates_proxy.setSourceModel(model)
-            self.candidatesList.setModel(candidates_proxy)
-        proxy_index = candidates_proxy.mapFromSource(new_model_index)
-        if proxy_index.isValid():
-            self.candidatesList.setCurrentIndex(proxy_index)
-            self.candidatesList.scrollTo(proxy_index, QListView.ScrollHint.PositionAtBottom)
+            model = candidates_proxy
+            new_model_index = model.add_candidate()
+        else:
+            model = candidates_proxy.sourceModel()
+            new_model_index = model.add_candidate(proxy=candidates_proxy)
+
+        if new_model_index.isValid():
+            self.candidatesList.setCurrentIndex(new_model_index)
+            self.candidatesList.scrollTo(new_model_index, QListView.ScrollHint.PositionAtBottom)
             try:
-                self.candidatesList.edit(proxy_index)
+                self.candidatesList.edit(new_model_index)
             except Exception as e:
                 logger.error(f"Failed to enter edit mode for candidatesList: {e}")
         else:
@@ -595,17 +612,23 @@ class MainPreferences(QDialog, Ui_preferences):
     def onManagePicks(self):
         logger.debug("onManagePicks started")
         profile = self.profile_manager.getCurrentProfile()
-        model = self.picksList.model().sourceModel()
-        words = sorted(model.get_picks())
-        logger.debug(f"onManagePicks: Passing words to dialog: {words}")
-        dialog = BatchAddDialog(self, words=words, word_length=self.word_length, title="Batch Add Picks")
+        model = self.picksList.model()
+        original_words = sorted(word for word in model.get_picks() if word)
+        logger.debug(f"onManagePicks: Passing words to dialog: {len(original_words)} picks")
+        dialog = BatchAddDialog(self, words=original_words, word_length=self.word_length, title="Batch Add Picks")
         if dialog.exec():
-            new_words = dialog.valid_words
-            for word in new_words:
-                model.add_pick(word)
+            self.picksList.blockSignals(True)
+            model.blockSignals(True)
+            new_words = sorted(dialog.valid_words)
+            for word in original_words:
+                if word not in new_words:
+                    model.remove_pick_by_text(word)
+            model.batch_add_picks(new_words, is_candidate=False)
+            model.blockSignals(False)
+            self.picksList.blockSignals(False)
             self.syncToProfile(self.profile_manager.getCurrentProfileName())
             self.updateCountLabels()
-            logger.debug(f"onManagePicks: Added {len(new_words)} picks: {new_words}")
+            logger.debug(f"onManagePicks: Added {len(new_words)} picks, Removed {len([w for w in original_words if w not in new_words])} picks")
         logger.debug("onManagePicks completed")
 
     @pyqtSlot()
@@ -613,19 +636,22 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug("onManageCandidates started")
         profile = self.profile_manager.getCurrentProfile()
         model = self.candidatesList.model().sourceModel()
-        original_words = sorted(model.get_candidates())
-        logger.debug(f"onManageCandidates: Passing words to dialog: {original_words}")
+        original_words = sorted(word for word in model.get_candidates() if word)
+        logger.debug(f"onManageCandidates: Passing words to dialog: {len(original_words)} candidates")
         dialog = BatchAddDialog(self, words=original_words, word_length=self.word_length, title="Batch Add Candidates")
         if dialog.exec():
-            new_words = dialog.valid_words
-            for word in new_words:
-                model.add_candidate(word)
+            self.candidatesList.blockSignals(True)
+            model.blockSignals(True)
+            new_words = sorted(dialog.valid_words)
             for word in original_words:
                 if word not in new_words:
-                    model.remove_candidate(word)
+                    model.remove_candidate_by_text(word)
+            model.batch_add_candidates(new_words)
+            model.blockSignals(False)
+            self.candidatesList.blockSignals(False)
             self.syncToProfile(self.profile_manager.getCurrentProfileName())
             self.updateCountLabels()
-            logger.debug(f"onManageCandidates: Added {len(new_words)} candidates: {new_words}, "
+            logger.debug(f"onManageCandidates: Added {len(new_words)} candidates, "
                         f"Removed {len([w for w in original_words if w not in new_words])} candidates")
         logger.debug("onManageCandidates completed")
 
