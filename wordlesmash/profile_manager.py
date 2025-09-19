@@ -310,12 +310,13 @@ class ProfileManager(QObject):
         logger.debug(f"modifyProfile called for name: {name}, new_name: {new_name}")
         profile = self.loadProfile(name)
         if new_name and new_name != name:
+            self._profile_names.discard(name)
             if new_name != profile.saved_name:
                 self.to_delete.add(profile.saved_name)
             else:
                 self.to_delete.discard(profile.saved_name)
-            if new_name != self._default_profile:
-                self._default_profile = new_name
+            if self.getDefaultProfile() == name:
+                self.setDefaultProfile(new_name)
                 logger.debug(f"Default profile renamed from {name} to {new_name}")
         else:
             # this is not a rename
