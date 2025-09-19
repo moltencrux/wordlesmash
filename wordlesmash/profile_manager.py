@@ -382,12 +382,13 @@ class ProfileManager(QObject):
         self.modified.clear()
         logger.debug("All changes committed, cleared modified profiles")
 
-    def discardChanges(self):
-        """Discard all pending changes and reload profiles."""
-        logger.debug("Discarding changes in ProfileManager")
-        self.modified.clear()
-        self.to_delete.clear()
-        self.loaded.clear()
-        self._default_profile = self.settings.value("default_profile", defaultValue=None)
-        self.current_profile = self._prev_profile
-        logger.debug(f"Changes discarded, default profile: {self._default_profile}, current profile: {self.current_profile}")
+    # XXX see if this still works
+    # def discardChanges(self):
+    #     """Discard all pending changes and reload profiles."""
+    #     logger.debug("Discarding changes in ProfileManager")
+    #     self.modified.clear()
+    #     self.to_delete.clear()
+    #     self.loaded.clear()
+    #     self._default_profile = self.settings.value("default_profile", defaultValue=None)
+    #     self.current_profile = self._prev_profile
+    #     logger.debug(f"Changes discarded, default profile: {self._default_profile}, current profile: {self.current_profile}")
