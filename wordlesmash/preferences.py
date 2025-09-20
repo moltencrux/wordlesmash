@@ -373,10 +373,12 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug("removeProfile started")
         current_profile = self.profile_manager.getCurrentProfileName()
         if current_profile:
-            self.profile_manager.to_delete.append(current_profile)
-            self.profile_manager.setCurrentProfile(None)
+            # self.profile_manager.to_delete.add(current_profile)
+            # self.profile_manager.setCurrentProfile(None)
+            self.profile_manager.deleteProfile(current_profile)
             self.populateProfiles()
         logger.debug("removeProfile completed")
+        # self.profile_manager.deleteProfile(current_profile)
 
     @pyqtSlot(QListWidgetItem)
     def validateInitialPick(self, item):
