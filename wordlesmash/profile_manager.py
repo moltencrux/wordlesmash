@@ -258,7 +258,7 @@ class ProfileManager(QObject):
             saved_name = name
         # Settings saved_name should be deleted if the profile has been renamed
         # since it was originally stored in settings
-        if name not in self.to_delete:
+        if saved_name:
             self.to_delete.add(saved_name)
             logger.debug(f"Marked profile {saved_name} for deletion")
 
@@ -271,7 +271,8 @@ class ProfileManager(QObject):
             logger.debug(f"Deleted default profile {name}, _default_profile set to {self._default_profile}")
 
     def processDeletions(self):
-        # Process all marked deletions
+        """Process all marked deletions, This removes the profile names marked
+        for deletion from QSettings and associated profile paths."""
         for name in self.to_delete:
             logger.debug(f"Processing deletion for profile {name}")
             self.settings.beginGroup("profiles")
@@ -285,7 +286,7 @@ class ProfileManager(QObject):
             #     del self.modified[name]
             # if name in self.loaded: # anyway, they should have been popped already
             #     del self.loaded[name]
-            self._profile_names.discard(name)
+            # self._profile_names.discard(name)
         self.to_delete.clear()
         logger.debug("All marked profiles deleted")
 
