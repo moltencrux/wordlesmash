@@ -330,22 +330,6 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="addCandidateButton">
-                     <property name="layoutDirection">
-                      <enum>Qt::LayoutDirection::LeftToRight</enum>
-                     </property>
-                     <property name="styleSheet">
-                      <string notr="true">border: none</string>
-                     </property>
-                     <property name="text">
-                      <string notr="true">+</string>
-                     </property>
-                     <property name="icon">
-                      <iconset theme="list-add"/>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
                     <widget class="QToolButton" name="removeCandidateButton">
                      <property name="styleSheet">
                       <string notr="true">border: none</string>
@@ -391,6 +375,19 @@
                   </property>
                   <property name="editTriggers">
                    <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="WordEntryLineEdit" name="candidatesLineEdit">
+                  <property name="font">
+                   <font>
+                    <family>Liberation Mono</family>
+                    <pointsize>18</pointsize>
+                   </font>
+                  </property>
+                  <property name="placeholderText">
+                   <string>Enter a word...</string>
                   </property>
                  </widget>
                 </item>
@@ -460,19 +457,6 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="addPickButton">
-                     <property name="styleSheet">
-                      <string notr="true">border: none</string>
-                     </property>
-                     <property name="text">
-                      <string/>
-                     </property>
-                     <property name="icon">
-                      <iconset theme="list-add"/>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
                     <widget class="QToolButton" name="removePickButton">
                      <property name="styleSheet">
                       <string notr="true">border: none</string>
@@ -518,6 +502,19 @@
                   </property>
                   <property name="editTriggers">
                    <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="WordEntryLineEdit" name="picksLineEdit">
+                  <property name="font">
+                   <font>
+                    <family>Liberation Mono</family>
+                    <pointsize>18</pointsize>
+                   </font>
+                  </property>
+                  <property name="placeholderText">
+                   <string>Enter a word...</string>
                   </property>
                  </widget>
                 </item>
@@ -624,6 +621,122 @@
               <property name="bottomMargin">
                <number>0</number>
               </property>
+              <item row="1" column="2">
+               <widget class="QListWidget" name="initialPicksList">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="font">
+                 <font>
+                  <family>Liberation Mono</family>
+                  <pointsize>18</pointsize>
+                 </font>
+                </property>
+                <property name="sortingEnabled">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QFrame" name="initialPicksHeaderFrame">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="frameShape">
+                 <enum>QFrame::Shape::NoFrame</enum>
+                </property>
+                <property name="frameShadow">
+                 <enum>QFrame::Shadow::Raised</enum>
+                </property>
+                <layout class="QHBoxLayout" name="horizontalLayout_7">
+                 <property name="spacing">
+                  <number>4</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QLabel" name="initialPicksLabel">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>Initial Picks</string>
+                   </property>
+                   <property name="buddy">
+                    <cstring>initialPicksList</cstring>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <spacer name="initialPicksSpacer">
+                   <property name="orientation">
+                    <enum>Qt::Orientation::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>13</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item>
+                  <widget class="QToolButton" name="removeInitialPickButton">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Fixed" vsizetype="Minimum">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="styleSheet">
+                    <string notr="true">border: none</string>
+                   </property>
+                   <property name="text">
+                    <string>...</string>
+                   </property>
+                   <property name="icon">
+                    <iconset theme="list-remove"/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QToolButton" name="genSuggestionsButton">
+                   <property name="toolTip">
+                    <string>Generate a set of good initial picks for your candidates and picks based on a heuristic</string>
+                   </property>
+                   <property name="styleSheet">
+                    <string notr="true">border: none</string>
+                   </property>
+                   <property name="text">
+                    <string>...</string>
+                   </property>
+                   <property name="icon">
+                    <iconset theme="applications-utilities"/>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </item>
               <item row="0" column="0">
                <widget class="QFrame" name="decisionTreeHeaderFrame">
                 <property name="sizePolicy">
@@ -718,142 +831,20 @@
                 </layout>
                </widget>
               </item>
-              <item row="1" column="2">
-               <widget class="QListWidget" name="initialPicksList">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
+              <item row="2" column="2">
+               <widget class="WordEntryLineEdit" name="initialPicksLineEdit">
                 <property name="font">
                  <font>
                   <family>Liberation Mono</family>
                   <pointsize>18</pointsize>
                  </font>
                 </property>
-                <property name="sortingEnabled">
-                 <bool>true</bool>
+                <property name="placeholderText">
+                 <string>Enter a word...</string>
                 </property>
                </widget>
               </item>
-              <item row="0" column="2">
-               <widget class="QFrame" name="initialPicksHeaderFrame">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="frameShape">
-                 <enum>QFrame::Shape::NoFrame</enum>
-                </property>
-                <property name="frameShadow">
-                 <enum>QFrame::Shadow::Raised</enum>
-                </property>
-                <layout class="QHBoxLayout" name="horizontalLayout_7">
-                 <property name="spacing">
-                  <number>4</number>
-                 </property>
-                 <property name="leftMargin">
-                  <number>0</number>
-                 </property>
-                 <property name="topMargin">
-                  <number>0</number>
-                 </property>
-                 <property name="rightMargin">
-                  <number>0</number>
-                 </property>
-                 <property name="bottomMargin">
-                  <number>0</number>
-                 </property>
-                 <item>
-                  <widget class="QLabel" name="initialPicksLabel">
-                   <property name="sizePolicy">
-                    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                     <horstretch>0</horstretch>
-                     <verstretch>0</verstretch>
-                    </sizepolicy>
-                   </property>
-                   <property name="text">
-                    <string>Initial Picks</string>
-                   </property>
-                   <property name="buddy">
-                    <cstring>initialPicksList</cstring>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <spacer name="initialPicksSpacer">
-                   <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
-                   </property>
-                   <property name="sizeHint" stdset="0">
-                    <size>
-                     <width>13</width>
-                     <height>20</height>
-                    </size>
-                   </property>
-                  </spacer>
-                 </item>
-                 <item>
-                  <widget class="QToolButton" name="addInitialPickButton">
-                   <property name="sizePolicy">
-                    <sizepolicy hsizetype="Fixed" vsizetype="Minimum">
-                     <horstretch>0</horstretch>
-                     <verstretch>0</verstretch>
-                    </sizepolicy>
-                   </property>
-                   <property name="styleSheet">
-                    <string notr="true">border: none</string>
-                   </property>
-                   <property name="text">
-                    <string/>
-                   </property>
-                   <property name="icon">
-                    <iconset theme="list-add"/>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QToolButton" name="removeInitialPickButton">
-                   <property name="sizePolicy">
-                    <sizepolicy hsizetype="Fixed" vsizetype="Minimum">
-                     <horstretch>0</horstretch>
-                     <verstretch>0</verstretch>
-                    </sizepolicy>
-                   </property>
-                   <property name="styleSheet">
-                    <string notr="true">border: none</string>
-                   </property>
-                   <property name="text">
-                    <string>...</string>
-                   </property>
-                   <property name="icon">
-                    <iconset theme="list-remove"/>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QToolButton" name="genSuggestionsButton">
-                   <property name="toolTip">
-                    <string>Generate a set of good initial picks for your candidates and picks based on a heuristic</string>
-                   </property>
-                   <property name="styleSheet">
-                    <string notr="true">border: none</string>
-                   </property>
-                   <property name="text">
-                    <string>...</string>
-                   </property>
-                   <property name="icon">
-                    <iconset theme="applications-utilities"/>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </widget>
-              </item>
-              <item row="1" column="0">
+              <item row="1" column="0" rowspan="2">
                <widget class="QListWidget" name="decisionTreeList">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
@@ -875,7 +866,7 @@
                 </property>
                </widget>
               </item>
-              <item row="0" column="1" rowspan="2">
+              <item row="0" column="1" rowspan="3">
                <widget class="QFrame" name="middleFrame">
                 <property name="frameShape">
                  <enum>QFrame::Shape::NoFrame</enum>
@@ -1018,6 +1009,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>WordEntryLineEdit</class>
+   <extends>QLineEdit</extends>
+   <header>wordlesmash/ui/WordEntryLineEdit.h</header>
+  </customwidget>
+ </customwidgets>
  <resources>
   <include location="wordlesmash.qrc"/>
  </resources>

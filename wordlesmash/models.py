@@ -5,12 +5,47 @@ from PyQt6.QtCore import (Qt, pyqtSlot, QModelIndex, QAbstractListModel,
 from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
     QItemDelegate, QListWidgetItem, QMessageBox, QTreeWidgetItem, QListView
 )
+from PyQt6.QtGui import QValidator
 import logging
 from typing import List, Dict, Optional, Any
 from sortedcontainers import SortedDict
 import bisect  # For insertion points
 
 logger = logging.getLogger(__name__)
+
+class FilterProxy(QSortFilterProxyModel):
+    "Filters a model against any number of containers"
+
+    def __init__(self, *excludes, parent=None):
+        super().__init__(parent)
+        self.excludes = (*excludes,)
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        if not self.excludes or not self.sourceModel():
+            logger.debug("FilterProxy.filterAcceptsRow: Accepting all, incomplete configuration")
+            return True
+        index = self.sourceModel().index(source_row, 0, source_parent)
+        word = self.sourceModel().data(index, Qt.ItemDataRole.DisplayRole)
+        logger.debug(f"FilterProxy.filterAcceptsRow: word={word}, accepted={word not in self.excludes}")
+        return not any(word in seq for seq in self.excludes)
+
+class ValidatedProxy(QSortFilterProxyModel):
+    "Filters a model against a validator"
+
+    def __init__(self, validator, parent=None):
+        super().__init__(parent)
+        self.validator = validator
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        if not self.validator or not self.sourceModel():
+            logger.debug("ValidatedProxy.filterAcceptsRow: Accepting all, incomplete configuration")
+            return True
+        index = self.sourceModel().index(source_row, 0, source_parent)
+        word = self.sourceModel().data(index, Qt.ItemDataRole.DisplayRole)
+        state, _, _ = self.validator.validate(word, 0)
+        accepted = state == QValidator.State.Acceptable
+        logger.debug(f"ValidatedProxy.filterAcceptsRow: word={word}, accepted={accepted}")
+        return accepted
 
 class PicksProxy(QSortFilterProxyModel):
     def __init__(self):
