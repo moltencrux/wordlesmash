@@ -42,7 +42,7 @@ class DecisionTreeRoutesGetter(QThread):
                 return
 
             tree = routes_to_dt(self.routes)
-            profile_name = self.profile_manager.getCurrentProfile()
+            profile_name = self.profile_manager.getCurrentProfileName()
             self.profile_manager.addDecisionTree(profile_name, tree)
             self.ready.emit(self.pick, True)
         except Exception as e:

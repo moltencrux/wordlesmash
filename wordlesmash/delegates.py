@@ -5,12 +5,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def wait_nonblocking(ms):
-    loop = QEventLoop()
-    QTimer.singleShot(ms, loop.quit)
-    loop.exec()
-
-
 class UpperCaseValidator(QValidator):
     def __init__(self, word_length, parent=None):
         super().__init__(parent)
@@ -143,39 +137,6 @@ class UpperCaseDelegate(QItemDelegate):
                 logger.error(f"UpperCaseDelegate.on_closeEditor: Cannot remove row {index.row()}, model_rows={model.rowCount() if model else 'None'}")
         self._editor_index.pop(editor, None)
         self._editor_original.pop(editor, None)
-
-class InitialPicksDelegate(UpperCaseDelegate):
-    def __init__(self, word_length, profile, parent=None):
-        super().__init__(word_length, profile, parent)
-        self._view = parent  # QListWidget
-        logger.debug("InitialPicksDelegate.__init__: Initialized for rendering and editor action handling")
-
-    def createEditor(self, parent, option, index):
-        logger.debug("InitialPicksDelegate.createEditor: Not used, handled by InitialPicksLineEdit")
-        return None  # No editor needed, handled by InitialPicksLineEdit
-
-    def handleEditorAction(self, action, text):
-        """Handle InitialPicksLineEdit editorAction signal."""
-        logger.debug(f"InitialPicksDelegate.handleEditorAction: action={action}, text='{text}'")
-        if not self._view:
-            logger.error("InitialPicksDelegate.handleEditorAction: No view set")
-            return
-        self._view.blockSignals(True)
-        try:
-            if action == "yes":
-                if text:
-                    self.profile.model.add_pick(text)
-                    item = QListWidgetItem(text)
-                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsSelectable)
-                    self._view.addItem(item)
-                    self._view.scrollToBottom()
-                    logger.debug(f"InitialPicksDelegate.handleEditorAction: Added '{text}' to initialPicksList")
-            elif action == "discard":
-                logger.debug("InitialPicksDelegate.handleEditorAction: Discarded input")
-            else:  # continue
-                logger.debug(f"InitialPicksDelegate.handleEditorAction: Kept editor open with text '{text}'")
-        finally:
-            self._view.blockSignals(False)
 
 class PicksDelegate(UpperCaseDelegate):
     def applyValidator(self, editor):

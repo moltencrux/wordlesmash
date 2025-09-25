@@ -6,7 +6,7 @@ from PyQt6.QtGui import QIcon, QCloseEvent
 from .ui_loader import load_ui_class, UI_CLASSES
 from .solver import DecisionTreeGuessManager
 from .dialogs import ProgressDialog, BatchAddDialog, NewProfileDialog
-from .delegates import UpperCaseDelegate, MultiBadgeDelegate, PicksDelegate, CandidatesDelegate, InitialPicksDelegate, InitialPickValidator, CandidateValidator, PickValidator
+from .delegates import UpperCaseDelegate, MultiBadgeDelegate, PicksDelegate, CandidatesDelegate, InitialPickValidator, CandidateValidator, PickValidator
 from .profile_manager import Profile # , ProfileManager
 from .wordle_game import Color
 from .workers import DecisionTreeRoutesGetter
@@ -38,9 +38,6 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug(f"initUI: QComboBox item count after clear: {self.profileComboBox.count()}")
         self.profileComboBox.setEditable(True)
         self.profileComboBox.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        # self.addInitialPickButton.clicked.connect(self.addInitialPick)
-        # self.addPickButton.clicked.connect(self.addPick)
-        # self.addCandidateButton.clicked.connect(self.addCandidate)
         self.removeInitialPickButton.clicked.connect(self.removeInitialPick)
         self.removePickButton.clicked.connect(self.removePick)
         self.removeCandidateButton.clicked.connect(self.removeCandidate)
@@ -60,7 +57,6 @@ class MainPreferences(QDialog, Ui_preferences):
         self.picksList.setItemDelegate(PicksDelegate(self.word_length, profile, self.picksList))
         self.candidatesList.setItemDelegate(CandidatesDelegate(self.word_length, profile, self.candidatesList))
         self.picksList.setModel(profile.model)
-        # self.candidatesList.setModel(profile.candidates_proxy)
         self.picksList.itemDelegate().closeEditor.connect(self.on_editor_closed)
         self.candidatesList.itemDelegate().closeEditor.connect(self.on_editor_closed)
         self.picksList.blockSignals(False)
@@ -83,14 +79,13 @@ class MainPreferences(QDialog, Ui_preferences):
         self.buttonBox.rejected.connect(self.onCancel)
         self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.onApply)
         # Disable default button to prevent Enter key from accepting dialog
+        # Question, could a custom dialog box be made to consume enter keyPressEvents?
         self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setAutoDefault(False)
         self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).setAutoDefault(False)
 
         delegate = MultiBadgeDelegate(self.treeWidget, badge_size=32, radius=6, font_px=18, spacing=3, left_padding=0)
         self.treeWidget.setItemDelegateForColumn(0, delegate)
         self.treeWidget.setIndentation(35)
-        # Install event filter for initialPicksLineEdit
-        ####self.initialPicksLineEdit.installEventFilter(self) # necessary??? #XXX
         logger.debug("MainPreferences.initUI: Installed event filter for initialPicksLineEdit")
         logger.debug("MainPreferences.initUI completed")
 
@@ -99,29 +94,26 @@ class MainPreferences(QDialog, Ui_preferences):
         if event.key() == Qt.Key.Key_Escape:
             logger.debug("Esc key pressed in MainPreferences, triggering close")
             self.close()
-            # self.closeEvent(QCloseEvent()) was this before .close()
             return
         elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             if self.profileComboBox.hasFocus() or self.profileComboBox.lineEdit().hasFocus():
                 self.renameProfile()
                 event.accept()
                 return
-            elif self.initialPicksLineEdit.hasFocus():
-                logger.debug("MainPreferences.keyPressEvent: Enter pressed in initialPicksLineEdit, handling via addInitialPick")
-                # self.addInitialPick()...
-                event.accept() # Is this to prevent closing? why would we see it if the child gets it?
-                return
+            # elif self.initialPicksLineEdit.hasFocus():
+            #     logger.debug("MainPreferences.keyPressEvent: Enter pressed in initialPicksLineEdit, handling via addInitialPick")
+            #     # self.addInitialPick()...
+            #     event.accept() # Is this to prevent closing? why would we see it if the child gets it?
+            #     return
         super().keyPressEvent(event)
 
     def syncToProfile(self, profile_name: str) -> None:
         logger.debug(f"syncToProfile: profile_name={profile_name}")
         profile = self.profile_manager.modifyProfile(profile_name)
         # XXX why do we do this? would it not already be synced?
-        # Actually, nothing happes on add ex adding to list, so sth needs to happpen
+        # Actually, nothing happens on add ex adding to list, so sth needs to happpen
         # but maybe the model should be linked, synced or sth.
         profile.initial_picks = {self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count()) if self.initialPicksList.item(i).text().strip()}
-        # profile.picks = self.picksList.model().get_picks()
-        # profile.candidates = self.candidatesList.model().get_candidates()
         profile.dirty = True
         profile.words_modified = True
         return profile
@@ -131,10 +123,6 @@ class MainPreferences(QDialog, Ui_preferences):
             if obj == self.profileComboBox.lineEdit():
                 logger.debug("MainPreferences.eventFilter: Enter pressed in profileComboBox.lineEdit, renaming profile")
                 self.renameProfile()
-                return True
-            elif obj == self.initialPicksLineEdit:
-                logger.debug("MainPreferences.eventFilter: Enter pressed in initialPicksLineEdit, handling via addInitialPick")
-                self.addInitialPick()
                 return True
         return super().eventFilter(obj, event)
 
@@ -244,6 +232,7 @@ class MainPreferences(QDialog, Ui_preferences):
             profile = self.profile_manager.getCurrentProfile()
             for word in sorted(profile.dt.keys()):
                 self.decisionTreeList.addItem(word)
+            self.removeInitialPick(pick)
             self.updateCountLabels()
         self.chartTreeButton.setEnabled(True)
 
@@ -316,8 +305,6 @@ class MainPreferences(QDialog, Ui_preferences):
                 item = QListWidgetItem(pick)
                 self.initialPicksList.addItem(item)
                 logger.debug(f"Added initial pick: '{pick}'")
-        # picks_proxy = AlphabeticProxy()
-        # picks_proxy.setSourceModel(profile.model)
         candidates_proxy = CandidatesProxy()
         candidates_proxy.setSourceModel(profile.model)
         self.candidatesList.setModel(candidates_proxy)
@@ -325,7 +312,6 @@ class MainPreferences(QDialog, Ui_preferences):
         self.decisionTreeList.clear()
         for pick in profile.dt:
             self.decisionTreeList.addItem(pick)
-        # self.updateDelegates()
         self.updateCountLabels()
         logger.debug(f"picksList rowCount after population: {self.picksList.model().rowCount()}")
         logger.debug("MainPreferences.populateLists completed")
@@ -350,8 +336,6 @@ class MainPreferences(QDialog, Ui_preferences):
     def updateDelegates(self):
         logger.debug("updateDelegates started")
         profile = self.profile_manager.getCurrentProfile()
-        # delegate_initial = InitialPicksDelegate(self.word_length, profile, self.initialPicksList)
-        # self.initialPicksList.setItemDelegate(delegate_initial)
         delegate_picks = PicksDelegate(self.word_length, profile, self.picksList)
         self.picksList.setItemDelegate(delegate_picks)
         delegate_candidates = CandidatesDelegate(self.word_length, profile, self.candidatesList)
@@ -360,20 +344,8 @@ class MainPreferences(QDialog, Ui_preferences):
         delegate_candidates.closeEditor.connect(self.on_editor_closed)
         delegate_picks.closeEditor.connect(self.on_editor_closed)
 
-        # Connect initialPicksLineEdit signals
-        try:
-            # self.initialPicksLineEdit.editorAction.disconnect()
-            ...
-        except TypeError:
-            pass  # Not connected yet
-        # delegate = self.initialPicksList.itemDelegate()
-        # self.initialPicksLineEdit.setProfile(profile)
-        # self.initialPicksLineEdit.editorAction.connect(delegate.handleEditorAction)
-        logger.debug("updateDelegates: Connected initialPicksLineEdit.editorAction to InitialPicksDelegate")
-
     def updateEditors(self):
         profile = self.profile_manager.getCurrentProfile()
-        # maybe neeed and updateEditors
 
         initPickValidator = InitialPickValidator(self.word_length, profile, self.initialPicksLineEdit)
         self.initialPicksLineEdit.setValidator(initPickValidator)
@@ -390,8 +362,6 @@ class MainPreferences(QDialog, Ui_preferences):
         pickValidator = PickValidator(self.word_length, profile, self.picksLineEdit)
         self.picksLineEdit.setValidator(pickValidator)
  
-
-
     @pyqtSlot()
     def renameProfile(self):
         # XXX probably should move most of this logic into the profile manager.
@@ -400,11 +370,8 @@ class MainPreferences(QDialog, Ui_preferences):
         current_profile = self.profile_manager.getCurrentProfileName()
         new_name = self.profileComboBox.currentText().strip()
         if new_name and new_name != current_profile:
-            # self.syncToProfile(current_profile)
             profile = self.profile_manager.modifyProfile(current_profile, new_name)
 
-            # profile.picks = self.picksList.model().get_picks()
-            # profile.candidates = self.candidatesList.model().get_candidates()
             ###profile.initial_picks = [self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count())]
             profile.dirty = True
             profile.words_modified = True # necessary? maybe.. but shouldn't always need to recalc dtrees
@@ -413,7 +380,7 @@ class MainPreferences(QDialog, Ui_preferences):
             if index >= 0:
                 self.profileComboBox.setCurrentIndex(index)
                 self.profile_manager.setCurrentProfile(new_name) # XXX i feel this is not enough
-                # i think the profile maanger shoudl take some real aciton here. verify later
+                # I think the profile maanger should take some real aciton here. verify later
         logger.debug("renameProfile completed")
 
     @pyqtSlot()
@@ -421,12 +388,9 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug("removeProfile started")
         current_profile = self.profile_manager.getCurrentProfileName()
         if current_profile:
-            # self.profile_manager.to_delete.add(current_profile)
-            # self.profile_manager.setCurrentProfile(None)
-            self.profile_manager.deleteProfile(current_profile)
-            self.populateProfiles()
+           self.profile_manager.deleteProfile(current_profile)
+           self.populateProfiles()
         logger.debug("removeProfile completed")
-        # self.profile_manager.deleteProfile(current_profile)
 
     @pyqtSlot(QListWidgetItem)
     def validateInitialPick(self, item):
@@ -437,34 +401,25 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug(f"validateInitialPick passed: text='{text}'")
         return True
 
-    # @pyqtSlot(QListWidgetItem)
-    # def validatePick(self, item):
-    #     text = item.strip().upper()
-    #     if len(text) != self.word_length or not text.isalpha():
-    #         logger.debug(f"validatePick failed: text='{text}'")
-    #         return False
-    #     logger.debug(f"validatePick passed: text='{text}'")
-    #     return True
-
-    # @pyqtSlot(QListWidgetItem)
-    # def validateCandidate(self, item):
-    #     text = item.strip().upper()
-    #     if len(text) != self.word_length or not text.isalpha():
-    #         logger.debug(f"validateCandidate failed: text='{text}'")
-    #         return False
-    #     logger.debug(f"validateCandidate passed: text='{text}'")
-    #     return True
-
     @pyqtSlot()
     def removePick(self):
         logger.debug("removePick started")
         picks_proxy = self.picksList.model()
-        model = picks_proxy.sourceModel()
+        if hasattr(picks_proxy, 'sourceModel'):
+            model = picks_proxy.sourceModel()
+        else:
+            model = picks_proxy
+
         selected_item = self.picksList.currentIndex()
+
+        text = model.data(selected_item)
+
         if selected_item.isValid():
             source_row = picks_proxy.mapToSource(selected_item).row()
             if 0 <= source_row < model.rowCount():
                 model.remove_pick_by_row(source_row)
+                self.removeInitialPick(text)
+                # XXX also remove DT
                 picks_proxy.invalidate()
                 # self.syncToProfile(self.profile_manager.getCurrentProfileName())
                 self.updateCountLabels()
@@ -473,63 +428,9 @@ class MainPreferences(QDialog, Ui_preferences):
                 logger.error(f"removePick Invalid source_row {source_row}, model_rows={self.picks_model.rowCount()}")
         logger.debug("removePick completed")
 
-
-
     @pyqtSlot()
-    def addInitialPick_old(self):
-        """Add a new item to initialPicksList and enter edit mode."""
-        new_item = QListWidgetItem("")
-        new_item.setFlags(new_item.flags() | Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable)
-        # self.addInitialPickButton.setDisabled(True)
-        profile = self.profile_manager.getCurrentProfile()
-        self.initialPicksList.addItem(new_item)
-        self.initialPicksList.scrollToBottom()
-        self.initialPicksList.setCurrentItem(new_item)
-        self.initialPicksList.setFocus()
-        try:
-            self.initialPicksList.editItem(new_item)
-        except Exception as e:
-            logger.error(f"Failed to enter edit mode for initialPicksList: {e}")
-        # self.addInitialPickButton.setEnabled(True)
-        self.is_modified = True
-
-    @pyqtSlot()
-    def addInitialPick_old2(self):
-        """Add a new pick using initialPicksLineEdit with autocomplete."""
-        # self.addInitialPickButton.setDisabled(True)
-        try:
-            profile = self.profile_manager.getCurrentProfile()
-            if not profile:
-                logger.error("addInitialPick: No current profile")
-                return
-
-            # Connect editorAction signal if not already connected
-            try:
-                self.initialPicksLineEdit.editorAction.disconnect()
-            except TypeError:
-                pass  # Not connected yet
-
-            delegate = self.initialPicksList.itemDelegate()
-            self.initialPicksLineEdit.editorAction.connect(delegate.handleEditorAction)
-            logger.debug("updateDelegates: Connected initialPicksLineEdit.editorAction to InitialPicksDelegate")
-
-            # Set focus to the line edit XXX keep this???
-            self.initialPicksLineEdit.show()
-            self.initialPicksLineEdit.raise_()
-            self.initialPicksLineEdit.activateWindow()
-            QTimer.singleShot(0, lambda: [self.initialPicksLineEdit.setFocus(Qt.FocusReason.PopupFocusReason), self.initialPicksLineEdit.selectAll()])
-            logger.debug("addInitialPick: Focused initialPicksLineEdit")
-
-            self.is_modified = True
-        except Exception as e:
-            logger.error(f"addInitialPick: Error: {e}")
-        finally:
-            # self.addInitialPickButton.setEnabled(True)
-            ...
-
-    @pyqtSlot()
-    def addInitialPick(self):
-        text = self.initialPicksLineEdit.text()
+    def addInitialPick(self, text=None):
+        text = text if text is not None else self.initialPicksLineEdit.text()
 
         if self.confirmInitialPick(text):
             item = QListWidgetItem(text)
@@ -622,35 +523,6 @@ class MainPreferences(QDialog, Ui_preferences):
         self.picksList.setCurrentIndex(new_model_index)
         self.picksLineEdit.clear()
 
-
-
-
-    def addCandidate_old(self):
-
-        logger.debug("addCandidate started")
-
-        candidates_proxy = self.candidatesList.model()
-        if not isinstance(candidates_proxy, CandidatesProxy):
-            logger.error("addCandidate: candidatesList model is not CandidatesProxy")
-            model = candidates_proxy
-            new_model_index = model.add_candidate()
-        else:
-            model = candidates_proxy.sourceModel()
-            new_model_index = model.add_candidate(proxy=candidates_proxy)
-
-        if new_model_index.isValid():
-            self.candidatesList.setCurrentIndex(new_model_index)
-            self.candidatesList.scrollTo(new_model_index, QListView.ScrollHint.PositionAtBottom)
-            try:
-                self.candidatesList.edit(new_model_index)
-            except Exception as e:
-                logger.error(f"Failed to enter edit mode for candidatesList: {e}")
-        else:
-            logger.error(f"addCandidate: Invalid proxy_index for source row {new_model_index.row()}")
-        # self.addCandidateButton.setEnabled(False)
-        logger.debug(f"addCandidate: candidatesList rowCount={self.candidatesList.model().rowCount()}")
-        logger.debug("addCandidate completed")
-
     def addCandidate(self):
         profile = self.profile_manager.getCurrentProfile()
         text = self.candidatesLineEdit.text()
@@ -660,13 +532,18 @@ class MainPreferences(QDialog, Ui_preferences):
         self.candidatesList.setCurrentIndex(new_model_index)
         self.candidatesLineEdit.clear()
 
-
     @pyqtSlot()
-    def removeInitialPick(self):
+    def removeInitialPick(self, text=None):
         logger.debug("removeInitialPick started")
-        selected_item = next(iter(self.initialPicksList.selectedItems()), None)
-        if selected_item:
-            self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
+
+        if text:
+            matches = self.initialPicksList.findItems(text, Qt.MatchFlag.MatchExactly)
+            item_to_remove = next(iter(matches), None)
+        else:
+            item_to_remove = next(iter(self.initialPicksList.selectedItems()), None)
+
+        if item_to_remove:
+            self.initialPicksList.takeItem(self.initialPicksList.row(item_to_remove))
             self.syncToProfile(self.profile_manager.getCurrentProfileName())
             self.updateCountLabels()
         logger.debug("removeInitialPick completed")
@@ -747,23 +624,6 @@ class MainPreferences(QDialog, Ui_preferences):
         self.profile_manager.commitChanges()
         logger.debug("saveSettings completed")
 
-    @pyqtSlot("QWidget*", QItemDelegate.EndEditHint)
-    def onCloseInitPicksEditor(self, editor, hint):
-        logger.debug(f"onCloseInitPicksEditor started, hint={hint}")
-        delegate = self.sender()
-        if isinstance(delegate, UpperCaseDelegate) and delegate.current_index.isValid():
-            row = delegate.current_index.row()
-            item = self.initialPicksList.item(row)
-            item_text = item.text().strip().upper() if item else ""
-            logger.debug(f"onCloseInitPicksEditor: item_text='{item_text}', escape_pressed={delegate.escape_pressed}, index_valid={delegate.current_index.isValid()}")
-            if delegate.escape_pressed or not item_text or not self.validateInitialPick(item_text):
-                self.initialPicksList.takeItem(row)
-                logger.debug(f"onCloseInitPicksEditor: Removed item '{item_text}' at row {row} (escape={delegate.escape_pressed}, valid={self.validateInitialPick(item_text)})")
-            self.updateCountLabels()
-            self.syncToProfile(self.profile_manager.getCurrentProfileName())
-        # self.addInitialPickButton.setEnabled(True)
-        logger.debug("onCloseInitPicksEditor completed")
-
 
     @pyqtSlot()
     def onManagePicks(self):
@@ -832,8 +692,8 @@ class MainPreferences(QDialog, Ui_preferences):
         if self.guess_manager is None:
             profile = self.profile_manager.getCurrentProfile()
             self.guess_manager = DecisionTreeGuessManager(
-                profile.picks,
-                profile.candidates,
+                profile.model.get_picks(),
+                profile.model.get_candidates(),
                 length=profile.word_length,
                 cache_path=self.profile_manager.app_cache_path()
             )
@@ -928,22 +788,3 @@ class MainPreferences(QDialog, Ui_preferences):
             if index >= 0:
                 self.profileComboBox.setCurrentIndex(index)
         logger.debug("populateProfiles completed")
-
-    def on_candidates_rows_inserted(self, parent: QModelIndex, start: int, end: int):
-        logger.debug(f"on_candidates_rows_inserted: start={start}, end={end}")
-        for row in range(start, end + 1):
-            idx = self.candidatesList.model().mapToSource(self.candidatesList.model().index(row, 0))
-            text = self.picks_model.data(idx, Qt.ItemDataRole.EditRole) or ""
-            if text:
-                logger.debug(f"Added candidate '{text}' via rowsInserted")
-            # Delegate ensures only valid entries are committed
-
-    def on_picks_rows_inserted(self, parent: QModelIndex, start: int, end: int):
-        logger.debug(f"on_picks_rows_inserted: start={start}, end={end}")
-        for row in range(start, end + 1):
-            idx = self.picksList.model().index(row, 0)
-            text = self.picks_model.data(idx, Qt.ItemDataRole.EditRole) or ""
-            if text:
-                logger.debug(f"Added pick '{text}' via rowsInserted")
-            # Delegate ensures only valid entries are committed
-
