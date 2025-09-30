@@ -395,8 +395,14 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug("removeProfile started")
         current_profile = self.profile_manager.getCurrentProfileName()
         if current_profile:
-           self.profile_manager.deleteProfile(current_profile)
-           self.populateProfiles()
+            reply = QMessageBox.question(
+                self, "Remove Profile?",
+                f"Remove profile <b>{current_profile}</b>?",
+                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+            )
+            if reply == QMessageBox.StandardButton.Ok:
+                self.profile_manager.deleteProfile(current_profile)
+                self.populateProfiles()
         logger.debug("removeProfile completed")
 
     @pyqtSlot(QListWidgetItem)

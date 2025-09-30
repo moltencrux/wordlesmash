@@ -5,6 +5,7 @@ tmp/
 ui/*_ui.py
 ui/*_rc.py
 *.sw?
+*.log
 .cache/
 .coverage
 dtree/
