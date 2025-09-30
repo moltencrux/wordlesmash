@@ -1,5 +1,7 @@
-from PyQt6.QtCore import Qt, pyqtSignal, QSize, QRect, QModelIndex, QEvent, QVariant, QEventLoop, QTimer, QStringListModel
-from PyQt6.QtWidgets import QLineEdit, QItemDelegate, QStyledItemDelegate, QAbstractItemDelegate, QListWidget, QMessageBox, QListView, QListWidgetItem 
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QRect, QModelIndex, QEvent, QTimer 
+from PyQt6.QtWidgets import (QLineEdit, QItemDelegate, QStyledItemDelegate,
+    QAbstractItemDelegate, QMessageBox, QListView
+)
 from PyQt6.QtGui import QValidator, QPainter, QFont, QColor
 import logging
 

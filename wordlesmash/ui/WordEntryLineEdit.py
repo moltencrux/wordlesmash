@@ -31,7 +31,8 @@ class WordEntryLineEdit(QLineEdit):
         self._completer = QCompleter(self._model, self)
         self._completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
         self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive) # XXX necessary?
-        self._completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self._completer.setFilterMode(Qt.MatchFlag.MatchStartsWith)
+        self._completer.setModelSorting(QCompleter.ModelSorting.CaseSensitivelySortedModel)
         self._completer.setCompletionColumn(0)
         self._completer.setCompletionRole(Qt.ItemDataRole.DisplayRole)
         self._completer.setMaxVisibleItems(10)

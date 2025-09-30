@@ -2,7 +2,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 from pathlib import Path
-from PyQt6.QtCore import QSettings, QStandardPaths, pyqtSignal, pyqtSlot, QObject, QModelIndex, QAbstractListModel
+from PyQt6.QtCore import QSettings, QStandardPaths, pyqtSignal, pyqtSlot, QObject, QModelIndex 
 from .tree_utils import routes_to_dt, read_decision_routes, dt_to_text
 from .models import PicksModel
 import logging
@@ -32,7 +32,9 @@ class Profile:
     words_modified: bool = False
     pending_dt_changes: Dict[str, set] = field(default_factory=lambda: {"added": set(), "deleted": set()})
 
+
 class ProfileManager(QObject):
+
     def __init__(self, parent=None, settings=None):
         super().__init__(parent)
         self.settings = settings if settings is not None else QSettings()
@@ -383,13 +385,3 @@ class ProfileManager(QObject):
         self.modified.clear()
         logger.debug("All changes committed, cleared modified profiles")
 
-    # XXX see if this still works
-    # def discardChanges(self):
-    #     """Discard all pending changes and reload profiles."""
-    #     logger.debug("Discarding changes in ProfileManager")
-    #     self.modified.clear()
-    #     self.to_delete.clear()
-    #     self.loaded.clear()
-    #     self._default_profile = self.settings.value("default_profile", defaultValue=None)
-    #     self.current_profile = self._prev_profile
-    #     logger.debug(f"Changes discarded, default profile: {self._default_profile}, current profile: {self.current_profile}")

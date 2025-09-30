@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>360</width>
-    <height>145</height>
+    <height>181</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -72,6 +72,20 @@
         <property name="value">
          <number>5</number>
         </property>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="2">
+       <widget class="QComboBox" name="startingWordsComboBox">
+        <item>
+         <property name="text">
+          <string>NYT basic word list</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Empty word list</string>
+         </property>
+        </item>
        </widget>
       </item>
      </layout>

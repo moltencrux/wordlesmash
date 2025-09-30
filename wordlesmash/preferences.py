@@ -1,16 +1,21 @@
-from PyQt6.QtCore import Qt, pyqtSlot, QModelIndex, QAbstractListModel, QSortFilterProxyModel, QVariant, QTimer, QEvent
+from PyQt6.QtCore import (Qt, pyqtSlot, QModelIndex, QAbstractListModel,
+    QSortFilterProxyModel, QVariant, QTimer, QEvent
+)
 from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
-    QItemDelegate, QListWidgetItem, QMessageBox, QTreeWidgetItem, QListView
+    QItemDelegate, QListWidgetItem, QMessageBox, QTreeWidgetItem, QListView,
+    QApplication
 )
 from PyQt6.QtGui import QIcon, QCloseEvent
-from .ui_loader import load_ui_class, UI_CLASSES
+from .ui_loader import load_ui_class, UI_CLASSES, pathhelper
 from .solver import DecisionTreeGuessManager
 from .dialogs import ProgressDialog, BatchAddDialog, NewProfileDialog
-from .delegates import UpperCaseDelegate, MultiBadgeDelegate, PicksDelegate, CandidatesDelegate, InitialPickValidator, CandidateValidator, PickValidator
-from .profile_manager import Profile # , ProfileManager
+from .delegates import (MultiBadgeDelegate, PicksDelegate, CandidatesDelegate,
+    InitialPickValidator, CandidateValidator, PickValidator
+)
+from .profile_manager import Profile
 from .wordle_game import Color
 from .workers import DecisionTreeRoutesGetter
-from .models import PicksModel, CandidatesProxy, AlphabeticProxy, FilterProxy, ValidatedProxy
+from .models import PicksModel, CandidatesProxy, ValidatedProxy
 import logging
 import time
 
@@ -319,6 +324,8 @@ class MainPreferences(QDialog, Ui_preferences):
     @pyqtSlot(int)
     def onProfileChanged(self, index: int):
         """Handle profile switch via profileComboBox.activated signal."""
+        QApplication.processEvents()   # lets the profileComboBox repaint loading
+        # self.profileComboBox.update()
         logger.debug(f"onProfileChanged: index={index}")
         self.loadProfileSettings(index)
         self.parent().resetGuessManager()
@@ -582,12 +589,31 @@ class MainPreferences(QDialog, Ui_preferences):
         if dialog.exec():
             name = dialog.nameEdit.text().strip()
             if name:
-                self.profile_manager.modifyProfile(name)
+                profile = self.profile_manager.modifyProfile(name)
                 self.populateProfiles()
                 index = self.profileComboBox.findData(name, Qt.ItemDataRole.UserRole)
                 if index >= 0:
                     self.profileComboBox.setCurrentIndex(index)
                 self.profile_manager.setCurrentProfile(name)
+
+                match dialog.startingWordsComboBox.currentText():
+                    case "NYT basic word list":
+
+                        candidates_file = pathhelper('wordle_candidates.txt', package='wordlesmash.words')
+                        with candidates_file.open("r", encoding="utf-8") as f:
+                            candidates = sorted(line.strip().upper() for line in f if line.strip())  # Pre-sort
+                        profile.model.batch_add_candidates(candidates)
+
+                        picks_file = pathhelper('wordle_picks.txt', package='wordlesmash.words')
+                        with picks_file.open("r", encoding="utf-8") as f:
+                            picks = sorted(line.strip().upper() for line in f if line.strip())  # Pre-sort
+                        profile.model.batch_add_picks(picks)
+
+                    case _:
+                        pass # do nothing
+
+                self.profile_manager.setCurrentProfile(name)
+
         logger.debug("addProfile completed")
 
     @pyqtSlot()
