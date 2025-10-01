@@ -2,9 +2,9 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 from pathlib import Path
-from PyQt6.QtCore import QSettings, QStandardPaths, pyqtSignal, pyqtSlot, QObject, QModelIndex 
+from PyQt6.QtCore import QSettings, QStandardPaths, pyqtSignal, pyqtSlot, QObject, QModelIndex, QStringListModel
 from .tree_utils import routes_to_dt, read_decision_routes, dt_to_text
-from .models import PicksModel
+from .models import PicksModel, InitialPicksModel
 import logging
 import shutil
 from weakref import WeakKeyDictionary, WeakValueDictionary
@@ -26,7 +26,7 @@ class Profile:
     candidates: Set[str] = field(default_factory=set)
     picks: Set[str] = field(default_factory=set)
     model: PicksModel = field(default_factory=PicksModel)
-    initial_picks: Set[str] = field(default_factory=set)  # {pick: status}
+    initial_picks: PicksModel = field(default_factory=InitialPicksModel)
     saved_name: Optional[str] = None
     dirty: bool = False
     words_modified: bool = False
@@ -147,16 +147,11 @@ class ProfileManager(QObject):
         self.settings.beginGroup(f"profiles/{name}")
         profile.word_length = int(self.settings.value("word_length", 5))
         profile.game_type = GameType(self.settings.value("game_type", GameType.WORDLE.value))
-        # Handle initial_picks as list or dict (for backward compatibility)
-        initial_picks = self.settings.value("initial_picks", [])
-        if initial_picks is None:
-            initial_picks = set()
-        else:
-            initial_picks = set(initial_picks)
-        if isinstance(initial_picks, dict):
-            profile.initial_picks = set(initial_picks.keys())  # Convert dict to list
-        else:
-            profile.initial_picks = {pick for pick in initial_picks if pick}
+
+        # Handle initial_picks as list
+        for pick in self.settings.value("initial_picks", []) or []: # [] maybe for legacy profile
+            profile.initial_picks.add_pick(pick)
+
         profile.dt = {}
         profile_dir = self.app_data_path / "profiles" / name
 
@@ -207,7 +202,7 @@ class ProfileManager(QObject):
         self.settings.beginGroup(f"profiles/{name}")
         self.settings.setValue("word_length", profile.word_length)
         self.settings.setValue("game_type", profile.game_type.value)
-        self.settings.setValue("initial_picks", sorted(profile.initial_picks))  # Save as list
+        self.settings.setValue("initial_picks", sorted(profile.initial_picks.get_picks()))
         self.settings.endGroup()
         self.settings.sync()
 
@@ -221,7 +216,7 @@ class ProfileManager(QObject):
             # Save candidates to candidates.txt
             with open(profile_dir / "candidates.txt", "w", encoding="utf-8") as f:
                 f.write("\n".join(sorted(profile.model.get_candidates())))
-            logger.debug(f"Saved profile: {name}, initial_picks: {profile.initial_picks}")
+            logger.debug(f"Saved profile: {name}")
         dtree_dir = profile_dir / "dtree"
         dtree_dir.mkdir(parents=True, exist_ok=True)
 
@@ -369,7 +364,7 @@ class ProfileManager(QObject):
         self._profile_names.update(self.modified.keys())
         for name, profile in self.modified.items():
             if profile.dirty:
-                logger.debug(f"Saving profile: {name}, initial_picks: {profile.initial_picks}")
+                logger.debug(f"Saving profile: {name}")
                 self.saveProfile(name, profile)
         # Save default profile if changed
         current_default = self.settings.value("default_profile", defaultValue=None)

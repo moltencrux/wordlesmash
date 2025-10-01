@@ -621,25 +621,6 @@
               <property name="bottomMargin">
                <number>0</number>
               </property>
-              <item row="1" column="2">
-               <widget class="QListWidget" name="initialPicksList">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="font">
-                 <font>
-                  <family>Liberation Mono</family>
-                  <pointsize>18</pointsize>
-                 </font>
-                </property>
-                <property name="sortingEnabled">
-                 <bool>true</bool>
-                </property>
-               </widget>
-              </item>
               <item row="0" column="2">
                <widget class="QFrame" name="initialPicksHeaderFrame">
                 <property name="sizePolicy">
@@ -954,6 +935,22 @@
                   </spacer>
                  </item>
                 </layout>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QListView" name="initialPicksList">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="font">
+                 <font>
+                  <family>Liberation Mono</family>
+                  <pointsize>18</pointsize>
+                 </font>
+                </property>
                </widget>
               </item>
              </layout>

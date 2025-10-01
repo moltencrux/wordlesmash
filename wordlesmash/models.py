@@ -223,7 +223,7 @@ class PicksModel(QAbstractListModel):
             if target in cache:
                 return cache[target]
             for i in range(len(cache), len(self._items)):
-                found = self._items[i]
+                found = self._items.keys()[i]
                 cache[found] = i
                 if found == target:
                     return i
@@ -303,10 +303,9 @@ class PicksModel(QAbstractListModel):
             logger.error(f"PicksModel.remove_pick_by_row: Invalid row {row}, items count={len(self._items)}")
             return False
         try:
-            text = self._items[row]
+            text = self._items.keys()[row]
             self.beginRemoveRows(QModelIndex(), row, row)
-            del self._items[row]
-            del self._picks[text]
+            del self._items[text]
             self.endRemoveRows()
             logger.debug(f"PicksModel.remove_pick_by_row: Successfully removed row {row}")
             return True
@@ -318,9 +317,9 @@ class PicksModel(QAbstractListModel):
         if not (0 <= row < len(self._items)):
             logger.error(f"PicksModel.remove_pick_by_row: Invalid row {row}, items count={len(self._items)}")
             return False
-        text = self._items[row]
-        if self._picks[text] == 'candidate':
-            self._picks[text] = 'pick'
+        text = self._items.keys()[row]
+        if self._items[text] == 'candidate':
+            self._items[text] = 'pick'
             model_index = self.index(row, 0)
             self.dataChanged.emit(model_index, model_index, [Qt.ItemDataRole.UserRole])
             logger.debug(f"PicksModel.remove_candidate_by_text: Removed candidate '{text}'")
@@ -669,3 +668,100 @@ class DisjointSetModel(QAbstractListModel):
 
     def get_right(self):
         return {k for k, v in self._roles.items() if v == 'right'}
+
+
+class InitialPicksModel(QAbstractListModel):
+    def __init__(self, picks: Optional[List[str]] = None, parent=None):
+        super().__init__(parent)
+        self._items = SortedDict({str(p).upper(): True for p in picks} if picks is not None else {})
+        logger.debug(f"InitialPicksModel.__init__: Initialized with {len(self._items)} picks")
+
+    def rowCount(self, parent=QModelIndex()):
+        if parent.isValid():
+            return 0
+        return len(self._items)
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid() or index.column() != 0 or index.row() >= len(self._items):
+            return QVariant()
+        word = self._items.iloc[index.row()]
+        if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
+            return word
+        return QVariant()
+
+    def flags(self, index: QModelIndex):
+        default_flags = super().flags(index)
+        if not index.isValid():
+            return default_flags
+        return default_flags | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        if not index.isValid() or index.column() != 0 or role != Qt.ItemDataRole.EditRole:
+            return False
+        value = str(value).upper()
+        old_word = self._items.iloc[index.row()]
+        if old_word == value:
+            return True
+        if value in self._items:
+            logger.debug(f"InitialPicksModel.setData: Duplicate value '{value}' at row {index.row()}")
+            return False
+        self.beginRemoveRows(QModelIndex(), index.row(), index.row())
+        self._items.pop(old_word)
+        self.endRemoveRows()
+        self.beginInsertRows(QModelIndex(), self._items.bisect_left(value), self._items.bisect_left(value))
+        self._items[value] = True
+        self.endInsertRows()
+        logger.debug(f"InitialPicksModel.setData: Changed '{old_word}' to '{value}'")
+        return True
+
+    def add_pick(self, text: str):
+        """Add a single pick, maintaining sort order."""
+        text = text.upper()
+        if text in self._items:
+            logger.debug(f"InitialPicksModel.add_pick: Duplicate pick '{text}'")
+            return False
+        row = self._items.bisect_left(text)
+        model_index = QModelIndex()
+        self.beginInsertRows(model_index, row, row)
+        self._items[text] = True
+        self.endInsertRows()
+        logger.debug(f"InitialPicksModel.add_pick: Added '{text}' at row {row}")
+
+        return model_index
+
+    def remove_pick_by_text(self, text: str):
+        """Remove a pick by its text."""
+        text = text.upper()
+        if text not in self._items:
+            logger.debug(f"InitialPicksModel.remove_pick_by_text: Pick '{text}' not found")
+            return False
+        row = self._items.index(text)
+        self.beginRemoveRows(QModelIndex(), row, row)
+        self._items.pop(text)
+        self.endRemoveRows()
+        logger.debug(f"InitialPicksModel.remove_pick_by_text: Removed '{text}' at row {row}")
+        return True
+
+    def get_picks(self):
+        """Return all picks as a list."""
+        return list(self._items.keys())
+
+    def __contains__(self, item):
+        return item in self._items
+
+    # def removeRows(self, row, count, parent=QModelIndex()):
+    #     if parent.isValid() or row < 0 or (row + count) > len(self._items):
+    #         return False
+    #     self.beginRemoveRows(parent, row, row + count - 1)
+    #     for t in self._items[row:row + count]:
+    #         if t == '':
+    #             self._new_item_role = None
+    #             self._empty_row = None
+    #         else:
+    #             self._roles.pop(t, None)
+    #     del self._items[row:row + count]
+    #     self.endRemoveRows()
+    #     return True
+
+    # def removeRow(self, row, parent=QModelIndex()):
+    #     return self.removeRows(row, 1, parent)
