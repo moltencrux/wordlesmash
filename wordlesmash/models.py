@@ -3,7 +3,8 @@ from PyQt6.QtCore import (Qt, pyqtSlot, QModelIndex, QAbstractListModel,
 )
 
 from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
-    QItemDelegate, QListWidgetItem, QMessageBox, QTreeWidgetItem, QListView
+    QItemDelegate, QListWidgetItem, QMessageBox, QTreeWidgetItem, QListView,
+    QApplication
 )
 from PyQt6.QtGui import QValidator
 import logging
@@ -165,6 +166,7 @@ class PicksModel(QAbstractListModel):
             logger.debug(f"setData: Updated role of '{word}' to '{value}' at row {row}")
             return True
         return False
+        # QApplication.processEvents() # double check if necessary
 
     def batch_add_picks(self, words: List[str], is_candidate: bool = False):
         """Add multiple picks or candidates in one operation."""
@@ -184,6 +186,7 @@ class PicksModel(QAbstractListModel):
             self._items[word] = role
         self.endInsertRows()
         logger.debug(f"batch_add_picks: Added {len(new_words)} {'candidates' if is_candidate else 'picks'} from row {row_start} to {row_end}")
+        QApplication.processEvents()
 
     def batch_add_candidates(self, words: List[str]):
         """Mark existing picks as candidates and add new candidates in one operation."""
@@ -215,6 +218,7 @@ class PicksModel(QAbstractListModel):
             end_idx = self.index(updated_rows[-1])
             self.dataChanged.emit(start_idx, end_idx, [Qt.ItemDataRole.UserRole])
             logger.debug(f"batch_add_candidates: Updated {len(updated_rows)} existing picks to candidates")
+        QApplication.processEvents()
 
     def make_batch_finder(self):
         """Create a function to find row indices with caching, resetting cache per call."""
@@ -273,6 +277,7 @@ class PicksModel(QAbstractListModel):
                 self.dataChanged.emit(model_index, model_index, [Qt.ItemDataRole.UserRole])
             logger.debug(f"PicksModel.add_candidate: '{text}' already exists, updated to candidate")
         model_index = self.index(row, 0)
+        QApplication.processEvents()
         return proxy.mapFromSource(model_index) if proxy else model_index
 
     def add_pick(self, text='', proxy=None):
@@ -293,6 +298,7 @@ class PicksModel(QAbstractListModel):
             row = self._row_of_text(text)
             logger.debug(f"PicksModel.add_pick: '{text}' already exists, skipping")
         model_index = self.index(row, 0)
+        QApplication.processEvents()
         return proxy.mapFromSource(model_index) if proxy else model_index
 
 
@@ -308,6 +314,7 @@ class PicksModel(QAbstractListModel):
             del self._items[text]
             self.endRemoveRows()
             logger.debug(f"PicksModel.remove_pick_by_row: Successfully removed row {row}")
+            QApplication.processEvents()
             return True
         except Exception as e:
             logger.error(f"PicksModel.remove_pick_by_row: Exception while removing row {row}: {e}")
@@ -323,6 +330,7 @@ class PicksModel(QAbstractListModel):
             model_index = self.index(row, 0)
             self.dataChanged.emit(model_index, model_index, [Qt.ItemDataRole.UserRole])
             logger.debug(f"PicksModel.remove_candidate_by_text: Removed candidate '{text}'")
+            QApplication.processEvents()
             return True
 
     def removeRows(self, row, count, parent=QModelIndex()):
@@ -337,6 +345,7 @@ class PicksModel(QAbstractListModel):
                 word = self._items.keys()[row]
                 self._items.pop(word, None)
         self.endRemoveRows()
+        QApplication.processEvents()
         return True
 
     def removeRow(self, row, parent=QModelIndex()):
@@ -367,6 +376,7 @@ class PicksModel(QAbstractListModel):
             model_index = self.index(row, 0)
             logger.debug(f"PicksModel.remove_pick_by_text: Removed '{text}' at row {row}")
             return proxy.mapFromSource(model_index) if proxy else model_index
+        QApplication.processEvents()
         return QModelIndex()
 
     def remove_candidate_by_text(self, text, proxy=None):
@@ -378,6 +388,7 @@ class PicksModel(QAbstractListModel):
             model_index = self.index(row, 0)
             logger.debug(f"PicksModel.remove_candidate_by_text: Removed '{text}' at row {row}")
             return proxy.mapFromSource(model_index) if proxy else model_index
+        QApplication.processEvents()
         return QModelIndex()
 
 class AlphabeticProxy(QSortFilterProxyModel):
@@ -670,7 +681,7 @@ class DisjointSetModel(QAbstractListModel):
         return {k for k, v in self._roles.items() if v == 'right'}
 
 
-class InitialPicksModel(QAbstractListModel):
+class StringSetModel(QAbstractListModel):
     def __init__(self, picks: Optional[List[str]] = None, parent=None):
         super().__init__(parent)
         self._items = SortedDict({str(p).upper(): True for p in picks} if picks is not None else {})
@@ -712,21 +723,24 @@ class InitialPicksModel(QAbstractListModel):
         self._items[value] = True
         self.endInsertRows()
         logger.debug(f"InitialPicksModel.setData: Changed '{old_word}' to '{value}'")
+        QApplication.processEvents()
         return True
 
     def add_pick(self, text: str):
         """Add a single pick, maintaining sort order."""
         text = text.upper()
+        row = self._items.bisect_left(text)
         if text in self._items:
             logger.debug(f"InitialPicksModel.add_pick: Duplicate pick '{text}'")
-            return False
-        row = self._items.bisect_left(text)
-        model_index = QModelIndex()
-        self.beginInsertRows(model_index, row, row)
-        self._items[text] = True
-        self.endInsertRows()
-        logger.debug(f"InitialPicksModel.add_pick: Added '{text}' at row {row}")
+            model_index = self.index(row, 0)
+        else:
+            model_index = QModelIndex()
+            self.beginInsertRows(model_index, row, row)
+            self._items[text] = True
+            self.endInsertRows()
+            logger.debug(f"InitialPicksModel.add_pick: Added '{text}' at row {row}")
 
+        QApplication.processEvents()
         return model_index
 
     def remove_pick_by_text(self, text: str):
@@ -740,7 +754,12 @@ class InitialPicksModel(QAbstractListModel):
         self._items.pop(text)
         self.endRemoveRows()
         logger.debug(f"InitialPicksModel.remove_pick_by_text: Removed '{text}' at row {row}")
+        QApplication.processEvents()
         return True
+    
+    def clear(self):
+        for text in self._items:
+            self.remove_pick_by_text(text)
 
     def get_picks(self):
         """Return all picks as a list."""
