@@ -1,10 +1,12 @@
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Tuple, Optional, Set
 from pathlib import Path
-from PyQt6.QtCore import QSettings, QStandardPaths, pyqtSignal, pyqtSlot, QObject, QModelIndex, QStringListModel
+from PyQt6.QtCore import (QSettings, QStandardPaths, pyqtSignal, pyqtSlot,
+    QObject, QModelIndex, QStringListModel
+)
 from .tree_utils import routes_to_dt, read_decision_routes, dt_to_text
-from .models import PicksModel, InitialPicksModel
+from .models import PicksModel, StringSetModel
 import logging
 import shutil
 from weakref import WeakKeyDictionary, WeakValueDictionary
@@ -22,14 +24,15 @@ class GameType(Enum):
 class Profile:
     word_length: int = 5
     dt: Dict[str, Optional[dict]] = field(default_factory=dict)  # {pick: path to dtree/<pick>.txt}
+    dt_model: StringSetModel = field(default_factory=StringSetModel)
     game_type: GameType = GameType.WORDLE
     candidates: Set[str] = field(default_factory=set)
     picks: Set[str] = field(default_factory=set)
     model: PicksModel = field(default_factory=PicksModel)
-    initial_picks: PicksModel = field(default_factory=InitialPicksModel)
+    initial_picks: StringSetModel = field(default_factory=StringSetModel)
     saved_name: Optional[str] = None
-    dirty: bool = False
-    words_modified: bool = False
+    writeback_words: bool = False
+    writeback_settings: bool = False
     pending_dt_changes: Dict[str, set] = field(default_factory=lambda: {"added": set(), "deleted": set()})
 
 
@@ -49,7 +52,7 @@ class ProfileManager(QObject):
         sender = self.sender()
         name = self._profile_name_by_model.get(sender)
         if name:
-            self.modifyProfile(name)
+            self.modifyProfileWords(name)
 
     def reset(self, parent=None, settings=None):
 
@@ -124,10 +127,11 @@ class ProfileManager(QObject):
 
     @pyqtSlot(str)
     def changeGameType(self, game_type: str):
-        # profile = self.loadProfile(self.current_profile)
-        profile = self.modifyProfile(self.current_profile)
+        profile = self.loadProfile(self.current_profile)
         profile.game_type = GameType(game_type)
-        profile.dirty = True
+        # profile.writeback_words = True
+        profile.writeback_settings = True
+        self.invalidate_all_dt(profile)
 
     def loadProfile(self, name: str) -> Profile:
         if name in self.modified:
@@ -195,7 +199,7 @@ class ProfileManager(QObject):
         sender = self.sender()
         name = self._profile_name_by_model.get(sender)
         if name:
-            self.modifyProfile(name)
+            self.modifyProfileWords(name)
 
 
     def saveProfile(self, name: str, profile: Profile):
@@ -210,7 +214,7 @@ class ProfileManager(QObject):
         profile_dir = self.app_data_path / "profiles" / name
         profile_dir.mkdir(parents=True, exist_ok=True)
         # Save picks to picks.txt
-        if profile.words_modified or profile.saved_name != name:
+        if profile.writeback_words or profile.saved_name != name:
             with open(profile_dir / "picks.txt", "w", encoding="utf-8") as f:
                 f.write("\n".join(sorted(profile.model.get_picks())))
             # Save candidates to candidates.txt
@@ -235,15 +239,15 @@ class ProfileManager(QObject):
             save_dts = profile.pending_dt_changes["added"]
         else:
             save_dts = profile.dt.keys()
-
+        # the word 'bland' is not in profile.dt. why not?
         for word in save_dts:
             if word in profile.dt:
                 with open(dtree_dir / f"{word}.txt", "w", encoding="utf-8") as f:
                     f.write(dt_to_text({word: profile.dt[word]}))
 
         profile.pending_dt_changes = {"added": set(), "deleted": set()}
-        profile.dirty = False
-        profile.words_modified = False
+        profile.writeback_words = False
+        profile.writeback_settings = False
 
     def deleteProfile(self, name: str):
         # Mark profile for deletion instead of immediate removal
@@ -279,34 +283,12 @@ class ProfileManager(QObject):
             if profile_dir.exists():
                 shutil.rmtree(profile_dir)
                 logger.debug(f"Deleted profile directory: {profile_dir}")
-            # if name in self.modified: # Don't do this as a profile could be added after deleted
-            #     del self.modified[name]
-            # if name in self.loaded: # anyway, they should have been popped already
-            #     del self.loaded[name]
-            # self._profile_names.discard(name)
         self.to_delete.clear()
         logger.debug("All marked profiles deleted")
 
-    def renameProfile(self, prev_name, name):
-        if prev_name == name:
-            return
-
-        profile = self.loadProfile(prev_name)
-        if profile.saved_name and profile.saved_name != name:
-            self.to_delete.add(profile.saved_name)
-        else:
-            self.to_delete.discard(profile.saved_name)
-        if prev_name in self.loaded:
-            self.loaded.pop(prev_name)
-        elif prev_name in self.modified:
-            self.modified.pop(prev_name)
-        self.modified[name] = profile
-
-        return profile
-
-    def modifyProfile(self, name: str, new_name: Optional[str] = None) -> Profile:
+    def renameProfile(self, name: str, new_name: str) -> Profile:
         logger.debug(f"modifyProfile called for name: {name}, new_name: {new_name}")
-        profile = self.loadProfile(name)
+        profile = self._modifyProfile(name)
         if new_name and new_name != name:
             self._profile_names.discard(name)
             if new_name != profile.saved_name:
@@ -316,37 +298,73 @@ class ProfileManager(QObject):
             if self.getDefaultProfile() == name:
                 self.setDefaultProfile(new_name)
                 logger.debug(f"Default profile renamed from {name} to {new_name}")
-        else:
-            # this is not a rename
-            new_name = name
-        self.loaded.pop(name, None)
-        self.modified[new_name] = profile
-        profile.dirty = True # necessary still?
+
+            profile.writeback_words = True
+            profile.writeback_settings = True
+    
         return profile
+
+    @staticmethod
+    def invalidate_all_dt(profile):
+        for pick in profile.dt:
+            profile.initial_picks.add_pick(pick)
+        profile.pending_dt_changes['deleted'].update(profile.dt.keys())
+        profile.dt.clear()
+        profile.dt_model.clear()
+        # how do we update the interface?
+
+    def _modifyProfile(self, name: str) -> Profile:
+        logger.debug(f"_modifyProfile called for name: {name}")
+        profile = self.loadProfile(name)
+        self.loaded.pop(name, None)
+        self.modified[name] = profile
+        # specific mod flags should be set by specific modfier methods
+        return profile
+
+    def modifyProfileWords(self, name: str) -> Profile:
+        logger.debug(f"modifyProfile called for name: {name}, new_name: {name}")
+        profile = self._modifyProfile(name)
+        profile.writeback_words = True
+        profile.writeback_settings = True
+        self.invalidate_all_dt(profile)
+        return profile
+        # are we sure to need to invalidate dt?
+        # do we ever use this when dts aren't invalidated? like...
+        # when DTs are added?
+        # when do we not need to invalidate?
+            # 
+    def modifyProfileSettings(self, name: str) -> Profile:
+        profile = self._modifyProfile(name)
+        profile.writeback_settings = True
+        return profile
+
 
     def removeDecisionTree(self, name: str, word: str):
         """Mark a decision tree for removal from a profile."""
-        profile = self.modifyProfile(name)
+        profile = self._modifyProfile(name)
         if word in profile.dt:
             profile.pending_dt_changes["deleted"].add(word)
             del profile.dt[word]
             profile.pending_dt_changes["added"].discard(word)
-            profile.dirty = True
+
             logger.debug(f"Marked decision tree {word} for deletion in profile {name}")
 
-    def addDecisionTree(self, name: str, tree_data: Dict[str, Optional[dict]]):
+    # def addDecisionTree(self, name: str, tree_data: Dict[str, Optional[dict]]):
+    def addDecisionTree(self, name: str, routes: List[Tuple[str]], success: bool):
         """Add or update a decision tree in a profile."""
-        profile = self.modifyProfile(name)
+        if success:
 
-        for word in tree_data.keys():
-            profile.pending_dt_changes["added"].add(word)
-        for word in profile.dt.keys() & tree_data.keys():
-            profile.pending_dt_changes["deleted"].add(word)
-            # even it's not deleted, it would just get overwritten I think
+            tree_data = routes_to_dt(routes)
+            profile = self.modifyProfileSettings(name)
 
-        profile.dt.update(tree_data)
-
-        profile.dirty = True
+            for word in tree_data.keys():
+                profile.pending_dt_changes["added"].add(word)
+                profile.dt_model.add_pick(word)
+                profile.initial_picks.remove_pick_by_text(word)
+            for word in profile.dt.keys() & tree_data.keys():
+                profile.pending_dt_changes["deleted"].add(word)
+                # even it's not deleted, it would just get overwritten I think
+            profile.dt.update(tree_data)
 
     def has_pending_changes(self) -> bool:
         """Check if there are any pending changes to profiles or default profile."""
@@ -363,7 +381,7 @@ class ProfileManager(QObject):
         self.processDeletions()  # Process pending deletions
         self._profile_names.update(self.modified.keys())
         for name, profile in self.modified.items():
-            if profile.dirty:
+            if profile.writeback_settings or profile.writeback_words:
                 logger.debug(f"Saving profile: {name}")
                 self.saveProfile(name, profile)
         # Save default profile if changed

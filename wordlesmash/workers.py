@@ -21,7 +21,7 @@ class SuggestionGetter(QThread):
 
 
 class DecisionTreeRoutesGetter(QThread):
-    ready = pyqtSignal(str, bool)
+    ready = pyqtSignal(str, object, bool)
 
     def __init__(self, profile_manager, pick, guess_manager, parent=None):
         super().__init__(parent)
@@ -34,20 +34,21 @@ class DecisionTreeRoutesGetter(QThread):
 
     def run(self):
         try:
+            profile_name = self.profile_manager.getCurrentProfileName()
             self.routes = self.guess_manager.gen_routes(self.pick)
             # Verify routes are valid
             if self.routes is None or not self.routes:
                 logging.error(f"Invalid or empty routes generated for {self.pick}")
-                self.ready.emit(self.pick, False)
+                self.ready.emit(profile_name, None, False)
                 return
 
-            tree = routes_to_dt(self.routes)
-            profile_name = self.profile_manager.getCurrentProfileName()
-            self.profile_manager.addDecisionTree(profile_name, tree)
-            self.ready.emit(self.pick, True)
+            # tree = routes_to_dt(self.routes)
+            # self.profile_manager.addDecisionTree(profile_name, tree)
+            # self.ready.emit(self.pick, True)
+            self.ready.emit(profile_name, self.routes, True)
         except Exception as e:
             logging.error(f"Failed to generate decision tree for {self.pick}: {e}")
-            self.ready.emit(self.pick, False)
+            self.ready.emit(profile_name, None, False)
 
     def stop(self):
         self.guess_manager.stop()

@@ -113,13 +113,11 @@ class MainPreferences(QDialog, Ui_preferences):
 
     def syncToProfile(self, profile_name: str) -> None:
         logger.debug(f"syncToProfile: profile_name={profile_name}")
-        profile = self.profile_manager.modifyProfile(profile_name)
+        profile = self.profile_manager.modifyProfileWords(profile_name)
         # XXX why do we do this? would it not already be synced?
         # Actually, nothing happens on add ex adding to list, so sth needs to happpen
         # but maybe the model should be linked, synced or sth.
         # profile.initial_picks = {self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count()) if self.initialPicksList.item(i).text().strip()}
-        profile.dirty = True
-        profile.words_modified = True
         return profile
 
     def eventFilter(self, obj, event):
@@ -176,50 +174,10 @@ class MainPreferences(QDialog, Ui_preferences):
             logger.debug("No word selected for decision tree generation")
             return
 
-        # Check if an editor is open for the selected item
         selected_index = next(iter(selected_indexes), None)
-        selected_item = model.data(selected_index)
+        pick = model.data(selected_index)
 
         # Check if an editor is open and retrieve its text
-        editor_text = None
-        if self.initialPicksList.isPersistentEditorOpen(selected_index):
-            logger.debug("Editor open for selected item, retrieving text")
-            editor = self.initialPicksList.itemWidget(selected_item)
-            if isinstance(editor, QLineEdit):
-                editor_text = editor.text().strip().upper()
-                logger.debug(f"Editor text: '{editor_text}'")
-        if editor_text:
-            if not self.validateInitialPick(editor_text):
-                logger.debug(f"Invalid editor text: '{editor_text}'")
-                QMessageBox.warning(self, "Invalid Input", f"The word must be exactly {self.word_length} alphabetic characters long.")
-                self.initialPicksList.closePersistentEditor(selected_item)
-                self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
-                # self.addInitialPickButton.setEnabled(True)
-                return
-            legal_picks = {self.picksList.model().data(self.picksList.model().index(i, 0), Qt.ItemDataRole.DisplayRole) for i in range(self.picksList.model().rowCount())}
-            if editor_text not in legal_picks:
-                reply = QMessageBox.question(
-                    self, "Add to Picks?",
-                    f"'{editor_text}' is not in the legal picks. Add it to picks.txt?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                )
-                if reply == QMessageBox.StandardButton.Yes:
-                    # XXX does this happen in the right order?
-                    self.picks_model.add_pick(editor_text)
-                    self.syncToProfile(self.profile_manager.getCurrentProfileName())
-                    profile = self.profile_manager.getCurrentProfile()
-                    profile.picks.add(editor_text)
-                    profile.dirty = True
-                    self.updateCountLabels()
-                else:
-                    logger.debug(f"User declined to add '{editor_text}' to picks")
-                    self.initialPicksList.closePersistentEditor(selected_item)
-                    self.initialPicksList.takeItem(self.initialPicksList.row(selected_item))
-                    # self.addInitialPickButton.setEnabled(True)
-                    return
-            self.initialPicksList.closePersistentEditor(selected_item)
-            # self.addInitialPickButton.setEnabled(True)
-        pick = selected_item
         if not pick:
             logger.debug("Empty word selected for decision tree generation")
             QMessageBox.warning(self, "Invalid Word", "The selected word is empty or invalid.")
@@ -232,25 +190,30 @@ class MainPreferences(QDialog, Ui_preferences):
     def updateDecisionTrees(self, pick: str, success: bool):
         """Update decisionTreeList and initialPicksList after DecisionTreeRoutesGetter finishes."""
         logger.debug(f"updateDecisionTrees: pick='{pick}', success={success}")
-        if success:
-            self.decisionTreeList.clear()
-            profile = self.profile_manager.getCurrentProfile()
-            for word in sorted(profile.dt.keys()):
-                self.decisionTreeList.addItem(word)
-            self.removeInitialPick(pick)
-            self.updateCountLabels()
+        # model = self.decisionTreeList.model()
+        # if success:
+        #     # model.clear()
+        #     profile = self.profile_manager.getCurrentProfile()
+        #     for word in sorted(profile.dt.keys()):
+        #         model.add_pick(word)
+        #     self.removeInitialPick(pick)
+        #     self.updateCountLabels()
         self.chartTreeButton.setEnabled(True)
-
 
     @pyqtSlot()
     def moveDecsionTreeToInitialPick(self, text=None):
         profile_name = self.profile_manager.getCurrentProfileName()
+
+        model = self.decisionTreeList.model()
+
         if not text:
-            selected_item = next(iter(self.decisionTreeList.selectedItems()), None)
-            if not selected_item:
+            selected_indexes = self.initialPicksList.selectionModel().selectedIndexes()
+            selected_index = next(iter(selected_indexes), None)
+            text = model.data(selected_index)
+
+            if not text:
                 logger.debug("No decision tree selected to move")
                 return
-            text = selected_item.text()
 
         self.removeDecisionTree(text)
 
@@ -271,22 +234,35 @@ class MainPreferences(QDialog, Ui_preferences):
     def removeDecisionTree(self, text=None):
         """Remove the selected decision tree, re-add its word to initialPicksList, and mark profile as modified."""
         logger.debug("removeDecisionTree started")
-        if text:
-            selected_item = next(iter(self.decisionTreeList.findItems(text, Qt.MatchFlag.MatchExactly)), None)
-        else:
-            selected_item = next(iter(self.decisionTreeList.selectedItems()), None)
-            text = selected_item.text()
+        model = self.decisionTreeList.model()
 
-        if not selected_item:
+        selected_indexes = self.initialPicksList.selectionModel().selectedIndexes()
+
+        if not selected_indexes:
+            logger.debug("No decision selected to remove")
+            return
+
+        # Check if an editor is open for the selected item
+        selected_index = next(iter(selected_indexes), None)
+        text = model.data(selected_index)
+
+        if text:
+            matches = model.match(model.index(0,0), Qt.ItemDataRole.DisplayRole, text, hits=-1, flags=Qt.MatchFlag.MatchExactly)
+            selected_index = next(iter(matches), None)
+        else:
+            selected_indexes = self.initialPicksList.selectionModel().selectedIndexes()
+            selected_index = next(iter(selected_indexes), None)
+            text = model.data(selected_index)
+
+        if not selected_indexes:
             logger.debug("No decision tree selected for removal")
             return
 
         profile_name = self.profile_manager.getCurrentProfileName()
 
         self.profile_manager.removeDecisionTree(profile_name, text)
-        self.decisionTreeList.takeItem(self.decisionTreeList.row(selected_item))
+        model.remove_pick_by_text(text)
         self.syncToProfile(self.profile_manager.getCurrentProfileName())
-        # self.updateCountLabels()
 
     def loadSettings(self):
         logger.debug("MainPreferences.loadSettings started")
@@ -327,13 +303,11 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug(f"populateLists: profile.picks={profile.picks}, profile.candidates={profile.candidates}")
         self.initialPicksList.setModel(profile.initial_picks)
         self.initialPicksList.selectionModel().selectionChanged.connect(self.onInitialPicksListSelectionChanged)
+        self.decisionTreeList.setModel(profile.dt_model)
         candidates_proxy = CandidatesProxy()
         candidates_proxy.setSourceModel(profile.model)
         self.candidatesList.setModel(candidates_proxy)
         self.picksList.setModel(profile.model) # no proxy for picks
-        self.decisionTreeList.clear()
-        for pick in profile.dt:
-            self.decisionTreeList.addItem(pick)
         self.updateCountLabels()
         logger.debug(f"picksList rowCount after population: {self.picksList.model().rowCount()}")
         logger.debug("MainPreferences.populateLists completed")
@@ -351,7 +325,6 @@ class MainPreferences(QDialog, Ui_preferences):
     @pyqtSlot()
     def onApply(self):
         logger.debug("onApply started")
-        self.syncToProfile(self.profile_manager.getCurrentProfileName())
         self.profile_manager.commitChanges()
         self.populateProfiles()
         self.parent().resetGuessManager()
@@ -390,20 +363,18 @@ class MainPreferences(QDialog, Ui_preferences):
     def renameProfile(self):
         # XXX probably should move most of this logic into the profile manager.
         # It's also probably broken with handling of picks/candidates and syncToProfile
+
         logger.debug("renameProfile started")
         current_profile = self.profile_manager.getCurrentProfileName()
         new_name = self.profileComboBox.currentText().strip()
         if new_name and new_name != current_profile:
-            profile = self.profile_manager.modifyProfile(current_profile, new_name)
+            profile = self.profile_manager.renameProfile(current_profile, new_name)
 
-            profile.dirty = True
-            profile.words_modified = True # necessary? maybe.. but shouldn't always need to recalc dtrees
             self.populateProfiles() # XXX does this incorporate the newly named one?
             index = self.profileComboBox.findData(new_name, Qt.ItemDataRole.UserRole)
             if index >= 0:
                 self.profileComboBox.setCurrentIndex(index)
                 self.profile_manager.setCurrentProfile(new_name) # XXX i feel this is not enough
-                # I think the profile maanger should take some real aciton here. verify later
         logger.debug("renameProfile completed")
 
     @pyqtSlot()
@@ -553,7 +524,8 @@ class MainPreferences(QDialog, Ui_preferences):
 
     @pyqtSlot()
     def addPick(self):
-        profile = self.profile_manager.getCurrentProfile()
+        profile_name = self.profile_manager.getCurrentProfileName()
+        profile = self.profile_manager.modifyProfileWords(profile_name)
         text = self.picksLineEdit.text()
         # picks_model = self.picksList.model()
         new_model_index = profile.model.add_pick(text)
@@ -561,17 +533,18 @@ class MainPreferences(QDialog, Ui_preferences):
         self.picksList.setCurrentIndex(new_model_index)
         self.picksLineEdit.clear()
         self.updateCountLabels()
-        profile.words_modified = True
+        profile.writeback_words = True
 
     def addCandidate(self):
-        profile = self.profile_manager.getCurrentProfile()
+        profile_name = self.profile_manager.getCurrentProfileName()
+        profile = self.profile_manager.modifyProfileWords(profile_name)
         text = self.candidatesLineEdit.text()
         candidates_proxy = self.candidatesList.model()
         new_model_index = profile.model.add_candidate(text, candidates_proxy)
         self.candidatesList.scrollTo(new_model_index, QListView.ScrollHint.PositionAtBottom)
         self.candidatesList.setCurrentIndex(new_model_index)
         self.candidatesLineEdit.clear()
-        profile.words_modified = True
+        profile.writeback_words = True
         self.updateCountLabels()
 
     @pyqtSlot()
@@ -652,7 +625,7 @@ class MainPreferences(QDialog, Ui_preferences):
         if dialog.exec():
             name = dialog.nameEdit.text().strip()
             if name:
-                profile = self.profile_manager.modifyProfile(name)
+                profile = self.profile_manager.modifyProfileWords(name)
                 self.populateProfiles()
                 index = self.profileComboBox.findData(name, Qt.ItemDataRole.UserRole)
                 if index >= 0:
@@ -789,7 +762,10 @@ class MainPreferences(QDialog, Ui_preferences):
             logger.debug(f"Created new DecisionTreeGuessManager for pick: '{pick}'")
         getter = DecisionTreeRoutesGetter(self.profile_manager, pick, self.guess_manager, self)
         progress_dialog = ProgressDialog(self, cancel_callback=getter.stop)
-        getter.ready.connect(self.updateDecisionTrees)
+        # getter.ready.connect(self.updateDecisionTrees)
+        getter.ready.connect(self.profile_manager.addDecisionTree)
+        # why not just connect it directly to the profile or profile manager?
+        # XXX
         getter.finished.connect(progress_dialog.close)
         progress_dialog.show()
         getter.start()
