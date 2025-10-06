@@ -465,20 +465,19 @@ class ProfileManager(QObject):
 
     def removeInitialPick(self, target):
         logger.debug("removeInitialPick started")
+
+        if not isinstance(target, (str, QModelIndex)):
+            raise ValueError('target must be a string or QAbstractModelIndex')
+            return
+        profile_name = self.getCurrentProfileName()
+        profile = self.modifyProfileSettings(profile_name)
         if isinstance(target, str):
-            profile_name = self.getCurrentProfileName()
-            profile = self.modifyProfileWords(profile_name)
             text = target
             model = profile.initial_picks
         elif isinstance(target, QModelIndex) and target.isValid():
-            profile_name = self.getCurrentProfileName()
-            profile = self.modifyProfileWords(profile_name)
             index = target
             model = index.model()
             text = model.data(index)
-        else:
-            raise ValueError('target must be a string or QAbstractModelIndex')
-            return
 
         model.remove_pick_by_text(text)
 

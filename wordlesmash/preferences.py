@@ -387,7 +387,7 @@ class MainPreferences(QDialog, Ui_preferences):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            profile_manager.addPick(text)
+            self.profile_manager.addPick(text)
             return True
 
         return False
