@@ -184,6 +184,8 @@ class ProfileManager(QObject):
                 profile.dt = routes_to_dt(route for file in dt_files for route in
                     read_decision_routes(file)
                 )
+                for tree in profile.dt:
+                    profile.dt_model.add_pick(tree)
         self.settings.endGroup()
         self.loaded[name] = profile
         self._profile_name_by_model[profile.model] = name
@@ -339,15 +341,18 @@ class ProfileManager(QObject):
         return profile
 
 
-    def removeDecisionTree(self, name: str, word: str):
+    def removeDecisionTree(self, word: str, profile_name: str =None):
         """Mark a decision tree for removal from a profile."""
-        profile = self._modifyProfile(name)
+        if not profile_name:
+            profile_name = self.getCurrentProfileName()
+
+        profile = self._modifyProfile(profile_name) # Q: modifyProfileSettings here? maybe not
         if word in profile.dt:
             profile.pending_dt_changes["deleted"].add(word)
             del profile.dt[word]
             profile.pending_dt_changes["added"].discard(word)
-
-            logger.debug(f"Marked decision tree {word} for deletion in profile {name}")
+            profile.dt_model.remove_pick_by_text(word)
+            logger.debug(f"Marked decision tree {word} for deletion in profile {profile_name}")
 
     # def addDecisionTree(self, name: str, tree_data: Dict[str, Optional[dict]]):
     def addDecisionTree(self, name: str, routes: List[Tuple[str]], success: bool):
@@ -398,3 +403,96 @@ class ProfileManager(QObject):
         self.modified.clear()
         logger.debug("All changes committed, cleared modified profiles")
 
+
+    def addPick(self, text):
+        profile_name = self.getCurrentProfileName()
+        profile = self.modifyProfileWords(profile_name)
+        return profile.model.add_pick(text)
+
+    def addCandidate(self, text):
+        profile_name = self.getCurrentProfileName()
+        profile = self.modifyProfileWords(profile_name)
+        return profile.model.add_candidate(text)
+
+    def removePick(self, index):
+        logger.debug("removePick started")
+
+        if index.isValid():
+            model = index.model()
+            profile_name = self.getCurrentProfileName()
+            profile = self.modifyProfileWords(profile_name)
+            if hasattr(model, 'sourceModel'):
+                pick_proxy, model = model, model.sourceModel()
+                index, proxy_index = pick_proxy.mapToSource(index), index
+            else:
+                pick_proxy = None
+
+            if model != profile.model:
+                raise ValueError("model mismatch")
+
+            text = model.data(index)
+            model.remove_pick_by_text(text)
+            if pick_proxy:
+                pick_proxy.invalidate()
+
+            self.removeInitialPick(text)
+            self.removeDecisionTree(profile_name, text)
+
+        logger.debug("removePick completed")
+
+    def removeCandidate(self, index):
+        logger.debug("removeCandidate started")
+
+        if index.isValid():
+            model = index.model()
+            profile_name = self.getCurrentProfileName()
+            profile = self.modifyProfileWords(profile_name)
+            if hasattr(model, 'sourceModel'):
+                candidates_proxy, model = model, model.sourceModel()
+                index, proxy_index = candidates_proxy.mapToSource(index), index
+            else:
+                candidates_proxy = None
+
+            if model != profile.model:
+                raise ValueError("model mismatch")
+
+            text = model.data(index)
+            model.remove_candidate_by_text(text)
+            if candidates_proxy:
+                candidates_proxy.invalidate()
+
+        logger.debug("removeCandidate completed")
+
+    def removeInitialPick(self, target):
+        logger.debug("removeInitialPick started")
+        if isinstance(target, str):
+            profile_name = self.getCurrentProfileName()
+            profile = self.modifyProfileWords(profile_name)
+            text = target
+            model = profile.initial_picks
+        elif isinstance(target, QModelIndex) and target.isValid():
+            profile_name = self.getCurrentProfileName()
+            profile = self.modifyProfileWords(profile_name)
+            index = target
+            model = index.model()
+            text = model.data(index)
+        else:
+            raise ValueError('target must be a string or QAbstractModelIndex')
+            return
+
+        model.remove_pick_by_text(text)
+
+    def batchAddPicks(self):
+        ...
+
+    def batchAddCandidates(self):
+        ...
+
+    def addInitialPick(self, text):
+        profile_name = self.getCurrentProfileName()
+        profile = self.modifyProfileSettings(profile_name)
+        return profile.initial_picks.add_pick(text)
+
+
+
+        

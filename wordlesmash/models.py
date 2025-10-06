@@ -370,7 +370,7 @@ class PicksModel(QAbstractListModel):
     def remove_pick_by_text(self, text, proxy=None):
         """Remove a pick by text, handling proxy if provided."""
         text = text.upper()
-        if text in self._items and self._items[text] == 'pick':
+        if text in self._items and self._items[text] in ('candidate', 'pick'):
             row = self._items.index(text)
             self.removeRows(row, 1)
             model_index = self.index(row, 0)
@@ -383,13 +383,18 @@ class PicksModel(QAbstractListModel):
         """Remove a candidate by text, handling proxy if provided."""
         text = text.upper()
         if text in self._items and self._items[text] == 'candidate':
+            # A removed candidate can still be a pick, so the row is not removed
             row = self._items.index(text)
-            self.removeRows(row, 1)
             model_index = self.index(row, 0)
+            self.setData(model_index, 'pick', Qt.ItemDataRole.UserRole)
             logger.debug(f"PicksModel.remove_candidate_by_text: Removed '{text}' at row {row}")
             return proxy.mapFromSource(model_index) if proxy else model_index
+
         QApplication.processEvents()
         return QModelIndex()
+
+    def __contains__(self, item):
+        return item in self._items
 
 class AlphabeticProxy(QSortFilterProxyModel):
     def __init__(self):
@@ -685,7 +690,14 @@ class StringSetModel(QAbstractListModel):
     def __init__(self, picks: Optional[List[str]] = None, parent=None):
         super().__init__(parent)
         self._items = SortedDict({str(p).upper(): True for p in picks} if picks is not None else {})
+        self._modified = False
         logger.debug(f"InitialPicksModel.__init__: Initialized with {len(self._items)} picks")
+
+    def isModified(self):
+        return self._modified
+
+    def resetModified(self):
+        self._modified = False
 
     def rowCount(self, parent=QModelIndex()):
         if parent.isValid():
@@ -716,6 +728,7 @@ class StringSetModel(QAbstractListModel):
         if value in self._items:
             logger.debug(f"InitialPicksModel.setData: Duplicate value '{value}' at row {index.row()}")
             return False
+        self._modified = True
         self.beginRemoveRows(QModelIndex(), index.row(), index.row())
         self._items.pop(old_word)
         self.endRemoveRows()
@@ -734,6 +747,7 @@ class StringSetModel(QAbstractListModel):
             logger.debug(f"InitialPicksModel.add_pick: Duplicate pick '{text}'")
             model_index = self.index(row, 0)
         else:
+            self._modified = True
             model_index = QModelIndex()
             self.beginInsertRows(model_index, row, row)
             self._items[text] = True
@@ -749,6 +763,7 @@ class StringSetModel(QAbstractListModel):
         if text not in self._items:
             logger.debug(f"InitialPicksModel.remove_pick_by_text: Pick '{text}' not found")
             return False
+        self._modified = True
         row = self._items.index(text)
         self.beginRemoveRows(QModelIndex(), row, row)
         self._items.pop(text)

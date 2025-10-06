@@ -70,7 +70,6 @@ class MainPreferences(QDialog, Ui_preferences):
         # Initialize chartTreeButton as disabled
         self.chartTreeButton.setEnabled(False)
 
-
         # Connect line editor signals
         self.initialPicksLineEdit.returnPressed.connect(self.addInitialPick)
         self.candidatesLineEdit.returnPressed.connect(self.addCandidate)
@@ -111,14 +110,14 @@ class MainPreferences(QDialog, Ui_preferences):
             #     return
         super().keyPressEvent(event)
 
-    def syncToProfile(self, profile_name: str) -> None:
-        logger.debug(f"syncToProfile: profile_name={profile_name}")
-        profile = self.profile_manager.modifyProfileWords(profile_name)
-        # XXX why do we do this? would it not already be synced?
-        # Actually, nothing happens on add ex adding to list, so sth needs to happpen
-        # but maybe the model should be linked, synced or sth.
-        # profile.initial_picks = {self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count()) if self.initialPicksList.item(i).text().strip()}
-        return profile
+    # def syncToProfile(self, profile_name: str) -> None:
+    #     logger.debug(f"syncToProfile: profile_name={profile_name}")
+    #     profile = self.profile_manager.modifyProfileWords(profile_name)
+    #     # XXX why do we do this? would it not already be synced?
+    #     # Actually, nothing happens on add ex adding to list, so sth needs to happpen
+    #     # but maybe the model should be linked, synced or sth.
+    #     # profile.initial_picks = {self.initialPicksList.item(i).text() for i in range(self.initialPicksList.count()) if self.initialPicksList.item(i).text().strip()}
+    #     return profile
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.KeyPress and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -186,83 +185,43 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug(f"Generating decision tree for word: '{pick}' in profile: '{profile_name}'")
         self.spawnDecisionTreeRoutesGetter(pick)
 
-    @pyqtSlot(str, bool)
-    def updateDecisionTrees(self, pick: str, success: bool):
-        """Update decisionTreeList and initialPicksList after DecisionTreeRoutesGetter finishes."""
-        logger.debug(f"updateDecisionTrees: pick='{pick}', success={success}")
-        # model = self.decisionTreeList.model()
-        # if success:
-        #     # model.clear()
-        #     profile = self.profile_manager.getCurrentProfile()
-        #     for word in sorted(profile.dt.keys()):
-        #         model.add_pick(word)
-        #     self.removeInitialPick(pick)
-        #     self.updateCountLabels()
-        self.chartTreeButton.setEnabled(True)
+    # @pyqtSlot(str, bool)
+    # def updateDecisionTrees(self, pick: str, success: bool):
+    #     """Update decisionTreeList and initialPicksList after DecisionTreeRoutesGetter finishes."""
+    #     logger.debug(f"updateDecisionTrees: pick='{pick}', success={success}")
+    #     # model = self.decisionTreeList.model()
+    #     # if success:
+    #     #     # model.clear()
+    #     #     profile = self.profile_manager.getCurrentProfile()
+    #     #     for word in sorted(profile.dt.keys()):
+    #     #         model.add_pick(word)
+    #     #     self.removeInitialPick(pick)
+    #     #     self.updateCountLabels()
+    #     self.chartTreeButton.setEnabled(True)
 
     @pyqtSlot()
     def moveDecsionTreeToInitialPick(self, text=None):
-        profile_name = self.profile_manager.getCurrentProfileName()
-
-        model = self.decisionTreeList.model()
-
-        if not text:
-            selected_indexes = self.initialPicksList.selectionModel().selectedIndexes()
-            selected_index = next(iter(selected_indexes), None)
-            text = model.data(selected_index)
-
-            if not text:
-                logger.debug("No decision tree selected to move")
-                return
-
-        self.removeDecisionTree(text)
-
-        model = self.initialPicksList.model()
-
-        if text not in model:
-            index = model.add_pick(text)
-            logger.debug(f"Re-added text '{text}' to initialPicksList")
-        self.syncToProfile(self.profile_manager.getCurrentProfileName())
-
-        profile = self.profile_manager.getCurrentProfile()
-        profile.dirty = True
-        logger.debug(f"Added '{text}' to profile.initial_picks")
-        self.updateCountLabels()
-
+        text = self.removeDecisionTree()
+        new_model_index = self.profile_manager.addInitialPick(text)
+        self.initialPicksList.scrollTo(new_model_index, QListView.ScrollHint.PositionAtBottom)
+        self.initialPicksList.setCurrentIndex(new_model_index)
+        logger.debug(f"Re-added text '{text}' to initialPicksList")
 
     @pyqtSlot()
     def removeDecisionTree(self, text=None):
-        """Remove the selected decision tree, re-add its word to initialPicksList, and mark profile as modified."""
-        logger.debug("removeDecisionTree started")
-        model = self.decisionTreeList.model()
+        index = next(iter(self.decisionTreeList.selectedIndexes()), None)
 
-        selected_indexes = self.initialPicksList.selectionModel().selectedIndexes()
-
-        if not selected_indexes:
-            logger.debug("No decision selected to remove")
-            return
-
-        # Check if an editor is open for the selected item
-        selected_index = next(iter(selected_indexes), None)
-        text = model.data(selected_index)
-
-        if text:
-            matches = model.match(model.index(0,0), Qt.ItemDataRole.DisplayRole, text, hits=-1, flags=Qt.MatchFlag.MatchExactly)
-            selected_index = next(iter(matches), None)
-        else:
-            selected_indexes = self.initialPicksList.selectionModel().selectedIndexes()
-            selected_index = next(iter(selected_indexes), None)
+        if not text:
+            model = self.decisionTreeList.model()
+            selected_index = next(iter(self.decisionTreeList.selectedIndexes()), None)
             text = model.data(selected_index)
 
-        if not selected_indexes:
-            logger.debug("No decision tree selected for removal")
-            return
+            if not text:
+                logger.debug("No decision tree selected")
+                return
 
-        profile_name = self.profile_manager.getCurrentProfileName()
-
-        self.profile_manager.removeDecisionTree(profile_name, text)
-        model.remove_pick_by_text(text)
-        self.syncToProfile(self.profile_manager.getCurrentProfileName())
+        self.profile_manager.removeDecisionTree(text)
+        return text
 
     def loadSettings(self):
         logger.debug("MainPreferences.loadSettings started")
@@ -288,7 +247,7 @@ class MainPreferences(QDialog, Ui_preferences):
             return
         logger.debug(f"Loading profile settings for: '{name}'")
         self.profile_manager.setCurrentProfile(name)
-        self.populateLists()
+        self.setListModels()
         self.updateDelegates()
         self.updateEditors()
         logger.debug(f"Loaded profile settings: '{name}', word_length={self.word_length}, "
@@ -296,21 +255,27 @@ class MainPreferences(QDialog, Ui_preferences):
                     f"picks={self.picksList.model().rowCount()}, "
                     f"candidates={self.candidatesList.model().rowCount()}")
 
-    def populateLists(self):
-        logger.debug("MainPreferences.populateLists started")
+    def setListModels(self):
+        logger.debug("MainPreferences.setListModels started")
         profile = self.profile_manager.getCurrentProfile()
         self.word_length = profile.word_length
-        logger.debug(f"populateLists: profile.picks={profile.picks}, profile.candidates={profile.candidates}")
+        logger.debug(f"setListModels: profile.picks={profile.picks}, profile.candidates={profile.candidates}")
         self.initialPicksList.setModel(profile.initial_picks)
         self.initialPicksList.selectionModel().selectionChanged.connect(self.onInitialPicksListSelectionChanged)
         self.decisionTreeList.setModel(profile.dt_model)
         candidates_proxy = CandidatesProxy()
         candidates_proxy.setSourceModel(profile.model)
         self.candidatesList.setModel(candidates_proxy)
+        candidates_proxy.rowsInserted.connect(self.updateCountLabels)
+        candidates_proxy.rowsRemoved.connect(self.updateCountLabels)
+        candidates_proxy.modelReset.connect(self.updateCountLabels)
         self.picksList.setModel(profile.model) # no proxy for picks
+        profile.model.rowsInserted.connect(self.updateCountLabels)
+        profile.model.rowsRemoved.connect(self.updateCountLabels)
+        profile.model.modelReset.connect(self.updateCountLabels)
         self.updateCountLabels()
         logger.debug(f"picksList rowCount after population: {self.picksList.model().rowCount()}")
-        logger.debug("MainPreferences.populateLists completed")
+        logger.debug("MainPreferences.setListModels completed")
 
     @pyqtSlot(int)
     def onProfileChanged(self, index: int):
@@ -392,65 +357,26 @@ class MainPreferences(QDialog, Ui_preferences):
                 self.populateProfiles()
         logger.debug("removeProfile completed")
 
-    @pyqtSlot(QListWidgetItem)
-    def validateInitialPick(self, item):
-        text = item.text().strip().upper() if isinstance(item, QListWidgetItem) else item.strip().upper()
-        if len(text) != self.word_length or not text.isalpha():
-            logger.debug(f"validateInitialPick failed: text='{text}'")
-            return False
-        logger.debug(f"validateInitialPick passed: text='{text}'")
-        return True
-
     @pyqtSlot()
     def removePick(self):
-        logger.debug("removePick started")
-        model = self.picksList.model()
-        selected_item = self.picksList.currentIndex()
-
-        if selected_item.isValid():
-            if hasattr(model, 'sourceModel'):
-                picks_proxy, model = model, model.sourceModel()
-                source_row = picks_proxy.mapToSource(selected_item).row()
-            else:
-                source_row = selected_item.row()
-                picks_proxy = None
-
-            text = model.data(selected_item)
-
-            if 0 <= source_row < model.rowCount():
-                model.remove_pick_by_row(source_row)
-                self.removeInitialPick(text)
-                if picks_proxy:
-                    picks_proxy.invalidate()
-                # XXX also remove DT
-                # 
-                self.removeDecisionTree(text)
-                self.syncToProfile(self.profile_manager.getCurrentProfileName())
-                self.updateCountLabels()
-
-            else:
-                logger.error(f"removePick Invalid source_row {source_row}, model_rows={self.picks_model.rowCount()}")
-        logger.debug("removePick completed")
+        selected_index = self.picksList.currentIndex()
+        self.profile_manager.removePick(selected_index)
 
     @pyqtSlot()
     def addInitialPick(self, text=None):
         text = text if text is not None else self.initialPicksLineEdit.text()
-        model = self.initialPicksList.model()
-
+        # model = self.initialPicksList.model()
         if self.confirmInitialPick(text):
-            new_model_index = model.add_pick(text)
+            new_model_index = self.profile_manager.addInitialPick(text)
             self.initialPicksList.scrollTo(new_model_index, QListView.ScrollHint.PositionAtBottom)
             self.initialPicksList.setCurrentIndex(new_model_index)
             self.initialPicksLineEdit.clear()
-            profile = self.profile_manager.getCurrentProfile()
-            profile.dirty = True # or syncToProfile?
 
 
     def confirmInitialPick(self, text) -> QMessageBox.StandardButton:
         profile = self.profile_manager.getCurrentProfile()
 
-        # XXX this check is ugly, need a better way to check if the model contains a word
-        if text and text in profile.model._items:
+        if text and text in profile.model:
             return True
 
         reply = QMessageBox.question(
@@ -461,33 +387,10 @@ class MainPreferences(QDialog, Ui_preferences):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            profile.model.add_pick(text)
+            profile_manager.addPick(text)
             return True
 
         return False
-
-    def handleEditorAction(self, action, text):
-        """Handle InitialPicksLineEdit editorAction signal."""
-        logger.debug(f"handleEditorAction: action={action}, text='{text}'")
-        profile = self.profile_manager.getCurrentProfile()
-        self.initialPicksList.blockSignals(True)
-        try:
-            if action == "yes":
-                if text:
-                    profile.model.add_pick(text)
-                    item = QListWidgetItem(text)
-                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsSelectable)
-                    self.initialPicksList.addItem(item)
-                    self.initialPicksList.scrollToBottom()
-                    logger.debug(f"handleEditorAction: Added '{text}' to initialPicksList")
-            elif action == "discard":
-                logger.debug("handleEditorAction: Discarded input")
-            else:  # continue
-                logger.debug(f"handleEditorAction: Kept editor open with text '{text}'")
-        finally:
-            self.initialPicksList.blockSignals(False)
-
-
 
     @pyqtSlot()
     def onOK(self):
@@ -506,78 +409,38 @@ class MainPreferences(QDialog, Ui_preferences):
         self.reject()
         logger.debug("onCancel completed")
 
-    # @pyqtSlot()
-    # def addPick(self):
-    #     logger.debug("addPick started")
-    #     model = self.picksList.model()
-    #     new_model_index = model.add_pick()
-    #     self.picksList.setCurrentIndex(new_model_index)
-    #     self.picksList.scrollTo(new_model_index, QListView.ScrollHint.PositionAtBottom)
-
-    #     try:
-    #         self.picksList.edit(new_model_index)
-    #     except Exception as e:
-    #         logger.error(f"Failed to enter edit mode for picksList: {e}")
-    #     # self.addPickButton.setEnabled(False)
-    #     logger.debug(f"addPick: model.rowCount={model.rowCount()}")
-    #     logger.debug("addPick completed")
-
     @pyqtSlot()
     def addPick(self):
-        profile_name = self.profile_manager.getCurrentProfileName()
-        profile = self.profile_manager.modifyProfileWords(profile_name)
         text = self.picksLineEdit.text()
-        # picks_model = self.picksList.model()
-        new_model_index = profile.model.add_pick(text)
+        new_model_index = self.profile_manager.addPick(text)
         self.picksList.scrollTo(new_model_index, QListView.ScrollHint.PositionAtBottom)
         self.picksList.setCurrentIndex(new_model_index)
         self.picksLineEdit.clear()
-        self.updateCountLabels()
-        profile.writeback_words = True
 
     def addCandidate(self):
-        profile_name = self.profile_manager.getCurrentProfileName()
-        profile = self.profile_manager.modifyProfileWords(profile_name)
         text = self.candidatesLineEdit.text()
-        candidates_proxy = self.candidatesList.model()
-        new_model_index = profile.model.add_candidate(text, candidates_proxy)
+        raw_model_index = self.profile_manager.addCandidate(text)
+        proxy = self.candidatesList.model()
+        new_model_index = proxy.mapFromSource(raw_model_index)
         self.candidatesList.scrollTo(new_model_index, QListView.ScrollHint.PositionAtBottom)
         self.candidatesList.setCurrentIndex(new_model_index)
         self.candidatesLineEdit.clear()
-        profile.writeback_words = True
-        self.updateCountLabels()
 
     @pyqtSlot()
     def removeInitialPick(self, text=None):
         logger.debug("removeInitialPick started")
 
-        selected_indexes = self.initialPicksList.selectionModel().selectedIndexes()
-        model = self.initialPicksList.model()
-
-        if not selected_indexes:
-            logger.debug("No word selected for decision tree generation")
-            return
-
-        # Check if an editor is open for the selected item
-        selected_index = next(iter(selected_indexes), None)
-        selected_item = model.data(selected_index)
-
         if text:
+            model = self.initialPicksList.model()
             matches = model.match(model.index(0,0), Qt.ItemDataRole.DisplayRole, text, hits=-1, flags=Qt.MatchFlag.MatchExactly)
-            # matches = self.initialPicksList.findItems(text, Qt.MatchFlag.MatchExactly)
-            item_to_remove = next(iter(matches), None)
+            index_to_remove = next(iter(matches), None)
         else:
             index_to_remove = next(iter(self.initialPicksList.selectedIndexes()), None)
-            item_to_remove = model.data(index_to_remove)
 
-        if item_to_remove:
-            model.remove_pick_by_text(text)
-            model.dirty = True
-            profile = self.profile_manager.getCurrentProfileName()
-            # self.syncToProfile(profile)
-            self.updateCountLabels()
+        if index_to_remove:
+            self.profile_manager.removeInitialPick(index_to_remove)
+
         logger.debug("removeInitialPick completed")
-    
 
     @pyqtSlot()
     def setDefaultProfile(self):
@@ -588,35 +451,10 @@ class MainPreferences(QDialog, Ui_preferences):
             self.populateProfiles()
         logger.debug("setDefaultProfile completed")
 
-
     @pyqtSlot()
     def removeCandidate(self):
-
-        logger.debug("removeCandidate started")
-        model = self.candidatesList.model()
-        selected_item = self.candidatesList.currentIndex()
-
-        if selected_item.isValid():
-            if hasattr(model, 'sourceModel'):
-                candidates_proxy, model = model, model.sourceModel()
-                source_row = candidates_proxy.mapToSource(selected_item).row()
-            else:
-                source_row = selected_item.row()
-                candidates_proxy = None
-
-            if 0 <= source_row < model.rowCount():
-                model.remove_candidate_by_row(source_row)
-
-                if candidates_proxy:
-                    candidates_proxy.invalidate()
-                self.syncToProfile(self.profile_manager.getCurrentProfileName()) # maybe yes actually
-                self.updateCountLabels()
-
-
-            else:
-                logger.error(f"removeCandidate: Invalid source_row {source_row}, model_rows={model.rowCount()}")
-        logger.debug("removeCandidate completed")
-
+        selected_index = self.candidatesList.currentIndex()
+        self.profile_manager.removeCandidate(selected_index)
 
     @pyqtSlot()
     def addProfile(self):
@@ -740,7 +578,6 @@ class MainPreferences(QDialog, Ui_preferences):
         # self.addCandidateButton.setEnabled(True)
         self.updateCountLabels()
         logger.debug("on_editor_closed: Re-enabled addPickButton and addCandidateButton")
-
 
 
     def spawnDecisionTreeRoutesGetter(self, pick):
