@@ -362,7 +362,7 @@ class PicksModel(QAbstractListModel):
             self.removeRows(row, 1)
 
     def get_picks(self):
-        return [word for word in self._items.keys() if self._items[word] == 'pick']
+        return [word for word in self._items.keys() if self._items[word] in ('pick', 'candidate')]
 
     def get_candidates(self):
         return [word for word in self._items.keys() if self._items[word] == 'candidate']

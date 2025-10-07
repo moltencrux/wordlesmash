@@ -41,10 +41,6 @@ def default(*args):
 
 class LazyList(list):
     """List that fills itself lazily from an iterator"""
-    # def __init__(self, generator=None):
-    #     self._is_filled = generator is None
-    #     self._generator = generator
-    #     # Not calling super().__init__, list population delayed
     def __init__(self, *generators):
         self._is_filled = len(generators) == 0
 
@@ -87,7 +83,6 @@ def load_word_list(filename):
             return tuple(line.split(maxsplit=1)[0] for line in f if line)
 
 
-
 class LazyMatrix:
     def __init__(self, func):
         self.func = func
@@ -106,15 +101,6 @@ def lazy_func(index):
 
 lazy_matrix = LazyMatrix(lazy_func)
 print(lazy_matrix[0, 0])  # Compute and print the value at (0, 0)
-
-
-
-
-
-
-
-
-
 
 
 

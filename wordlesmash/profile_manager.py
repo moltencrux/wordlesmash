@@ -334,7 +334,7 @@ class ProfileManager(QObject):
         # do we ever use this when dts aren't invalidated? like...
         # when DTs are added?
         # when do we not need to invalidate?
-            # 
+
     def modifyProfileSettings(self, name: str) -> Profile:
         profile = self._modifyProfile(name)
         profile.writeback_settings = True
@@ -481,11 +481,32 @@ class ProfileManager(QObject):
 
         model.remove_pick_by_text(text)
 
-    def batchAddPicks(self):
-        ...
+    def batchAddPicks(self, words):
+        profile_name = self.getCurrentProfileName()
+        profile = self.modifyProfileSettings(profile_name)
+        orig_picks = set(profile.model.get_picks())
+        new_words = set(words)
+        profile.model.beginResetModel()
+        profile.model.blockSignals(True)
+        for word in orig_picks - new_words:
+            profile.model.remove_pick_by_text(word)
+        profile.model.batch_add_picks(new_words - orig_picks)
+        profile.model.blockSignals(False)
+        profile.model.endResetModel()
 
-    def batchAddCandidates(self):
-        ...
+    def batchAddCandidates(self, words):
+        profile_name = self.getCurrentProfileName()
+        profile = self.modifyProfileSettings(profile_name)
+        orig_candidates = set(profile.model.get_candidates())
+        new_words = set(words)
+        profile.model.beginResetModel()
+        profile.model.blockSignals(True)
+        for word in orig_candidates - new_words:
+            profile.model.remove_candidate_by_text(word)
+        profile.model.batch_add_candidates(new_words - orig_candidates)
+        profile.model.blockSignals(False)
+        profile.model.endResetModel()
+
 
     def addInitialPick(self, text):
         profile_name = self.getCurrentProfileName()
