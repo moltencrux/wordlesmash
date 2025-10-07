@@ -41,7 +41,7 @@ A PyQT 6-based Wordle solver that uses decision trees to find optimal picks for 
 To install Word Le SMASH!, you'll need Python and PyQT 6 installed on your system. Install the required dependencies using pip:
 
 ```bash
-pip install numpy scipy joblib sortedcontainers pyqt6
+pip install numpy scipy sortedcontainers pyqt6
 ```
 
 ### Setup
@@ -82,7 +82,6 @@ To use Word Le SMASH! via the graphical user interface:
 - PyQT 6
 - NumPy (`numpy`)
 - SciPy (`scipy`)
-- joblib (`joblib`)
 - sortedcontainers (`sortedcontainers`)
 
 ## Contributing

@@ -25,7 +25,7 @@ import pstats
 import hashlib
 from traceback import format_exception_only
 from textwrap import dedent
-from joblib import Parallel, delayed, parallel_backend
+# from joblib import Parallel, delayed, parallel_backend
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import Event, get_context, Manager, Process
@@ -643,25 +643,25 @@ class WordleTree():
     # gen_rank_group_pick
 
 
-    def rank_expand_picks_par(self, candidates, picks, pick_hist):
-        '''Generate picks along with its heuristic score and a dict of
-        candidates partitioned by clue. Elements are a 3-tuple of
-        (pick, score, {clue:[candidates]})
-        '''
-        def split_and_score(pick):
-            clue_part, _ = self.split_candidates_by_clue(candidates, pick)
-            score = score_distribution(clue_part)
-            return score, pick, clue_part
+    # def rank_expand_picks_par(self, candidates, picks, pick_hist):
+    #     '''Generate picks along with its heuristic score and a dict of
+    #     candidates partitioned by clue. Elements are a 3-tuple of
+    #     (pick, score, {clue:[candidates]})
+    #     '''
+    #     def split_and_score(pick):
+    #         clue_part, _ = self.split_candidates_by_clue(candidates, pick)
+    #         score = score_distribution(clue_part)
+    #         return score, pick, clue_part
 
-        delayed_calls = [delayed(split_and_score)(pick) for pick in picks]
-        
-        with ProcessPoolExecutor(max_workers=4) as executor:
-            # Submit tasks to the executor
-            future_to_item = {executor.submit(split_and_score, pick): pick for pick in picks}
-            
-            # Yield results as they complete/best
-            for future in as_completed(future_to_item):
-                yield future.result()
+    #     delayed_calls = [delayed(split_and_score)(pick) for pick in picks]
+    #     
+    #     with ProcessPoolExecutor(max_workers=4) as executor:
+    #         # Submit tasks to the executor
+    #         future_to_item = {executor.submit(split_and_score, pick): pick for pick in picks}
+    #         
+    #         # Yield results as they complete/best
+    #         for future in as_completed(future_to_item):
+    #             yield future.result()
 
         # # currently pick_hist is not used, but maybe it should be
         # for pick in picks:
