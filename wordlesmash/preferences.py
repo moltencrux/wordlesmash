@@ -611,7 +611,7 @@ class MainPreferences(QDialog, Ui_preferences):
 
         root_item = QTreeWidgetItem()
         pick, clue_dict = next(iter(data_dict.items()))
-        root_item.setText(0, ','.join(pick))
+        root_item.setText(0, pick)
         stack = [(root_item, data_dict)]
         end = []
 
@@ -622,8 +622,9 @@ class MainPreferences(QDialog, Ui_preferences):
             pick, clue_dict = next(iter(dt.items()))
             for clue, new_dt in sorted(clue_dict.items()):
                 item = QTreeWidgetItem(parent)
-                text = ','.join(f'{char}:{color_hex_map[c]}' for char, c in zip(pick, clue))
-                item.setText(0, text)
+                user_data = ','.join(f'{color_hex_map[c]}' for char, c in zip(pick, clue))
+                item.setText(0, pick)
+                item.setData(0, Qt.ItemDataRole.UserRole, user_data)
                 if new_dt is not None:
                     stack.append((item, new_dt))
                 else:
@@ -640,16 +641,16 @@ class MainPreferences(QDialog, Ui_preferences):
     @pyqtSlot()
     def exploreTree(self):
         logger.debug("exploreTree started")
-        selected_item = next(iter(self.decisionTreeList.selectedItems()), None)
+        selected_index = next(iter(self.decisionTreeList.selectedIndexes()), None)
+        model = self.decisionTreeList.model()
 
-        if not selected_item:
+        if not selected_index:
             logger.debug("No word selected for decision tree generation")
             return
 
-        selected_index = self.decisionTreeList.indexFromItem(selected_item)
         # Check if an editor is open and retrieve its text
         profile = self.profile_manager.getCurrentProfile()
-        word = selected_item.text()
+        word = model.data(selected_index)
         if word not in profile.dt or profile.dt[word] is None:
             logger.debug(f"No valid decision tree for '{word}'")
             return

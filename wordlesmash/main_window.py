@@ -72,22 +72,24 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
             candidates = []
             logging.debug(type(sender))
             logging.debug("Empty or invalid routes generated")
+
+        self.decisionTreeListWidget.clear()
+        self.strategicListWidget.clear()
+        self.solutionListWidget.clear()
+        self.solutionCountLabel.setText(f'({len(candidates)})')
         if candidates:
-            self.decisionTreeListWidget.clear()
             for s in picks:
                 self.decisionTreeListWidget.addItem(s)
-            self.strategicListWidget.clear()
             for c in sorted([]):
                 self.strategicListWidget.addItem(c)
-            self.solutionListWidget.clear()
             for c in sorted(candidates):
                 self.solutionListWidget.addItem(c)
-            self.solutionCountLabel.setText(f'({len(candidates)})')
         if self.solutionListWidget.count() > 1:
             self.guessDisplay.setSubmitEnabled(True)
             # self.key_ENTER.setEnabled(True)
 
         self.guessDisplay.setWithdrawEnabled(True)
+        self.setEnabled(True)
 
     @pyqtSlot(str, tuple)
     def onWordSubmitted(self, word=None, colors=None):
@@ -119,6 +121,7 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         getter.finished.connect(progress_dialog.close)
 
         progress_dialog.show()
+        self.setDisabled(True)
         getter.start()
 
 

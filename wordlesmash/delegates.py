@@ -1,6 +1,8 @@
-from PyQt6.QtCore import Qt, pyqtSignal, QSize, QRect, QModelIndex, QEvent, QTimer 
+from PyQt6.QtCore import (Qt, pyqtSignal, QSize, QRect, QModelIndex, QEvent,
+    QTimer
+)
 from PyQt6.QtWidgets import (QLineEdit, QItemDelegate, QStyledItemDelegate,
-    QAbstractItemDelegate, QMessageBox, QListView
+    QAbstractItemDelegate, QMessageBox, QListView, QStyle
 )
 from PyQt6.QtGui import QValidator, QPainter, QFont, QColor
 import logging
@@ -161,24 +163,22 @@ class MultiBadgeDelegate(QStyledItemDelegate):
 
     def paint(self, painter, option, index):
         data = index.data()
+
         if not data:
             super().paint(painter, option, index)
             return
-        pairs = []
-        for part in data.split(','):
-            part = part.strip()
-            if not part:
-                continue
-            if ':' in part:
-                letter, color = part.split(':', 1)
-            elif '|' in part:
-                letter, color = part.split('|', 1)
-            else:
-                letter, color = part, "#777"
-            pairs.append((letter.strip(), color.strip()))
+
+        # Parse colors from UserRole data
+        colors = index.data(role=Qt.ItemDataRole.UserRole)
+        colors = (colors.split(',') if colors else []) + ['#777'] * len(data)
         rect = option.rect
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        # Draw selection background if item is selected
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.fillRect(rect, option.palette.highlight())
+
         font = QFont()
         font.setPixelSize(self.font_px)
         font.setBold(True)
@@ -186,7 +186,7 @@ class MultiBadgeDelegate(QStyledItemDelegate):
         fm = painter.fontMetrics()
         x = rect.x() + self.left_padding
         y = rect.y() + (rect.height() - self.badge_size) // 2
-        for letter, color in pairs:
+        for letter, color in zip(data, colors):
             badge_rect = QRect(x, y, self.badge_size, self.badge_size)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(color))
