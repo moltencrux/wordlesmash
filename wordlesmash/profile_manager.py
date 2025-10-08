@@ -432,8 +432,6 @@ class ProfileManager(QObject):
 
             text = model.data(index)
             model.remove_pick_by_text(text)
-            if pick_proxy:
-                pick_proxy.invalidate()
 
             self.removeInitialPick(text)
             self.removeDecisionTree(profile_name, text)
@@ -458,8 +456,6 @@ class ProfileManager(QObject):
 
             text = model.data(index)
             model.remove_candidate_by_text(text)
-            if candidates_proxy:
-                candidates_proxy.invalidate()
 
         logger.debug("removeCandidate completed")
 

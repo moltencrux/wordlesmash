@@ -51,7 +51,7 @@ class MainPreferences(QDialog, Ui_preferences):
         self.setDefaultProfileButton.clicked.connect(self.setDefaultProfile)
         self.copyProfileButton.clicked.connect(self.copyProfile)
         self.removeTreeButton.clicked.connect(self.moveDecisionTreeToInitialPick)
-        self.exploreTreeButton.clicked.connect(self.exploreTree)
+        self.exploreTreeButton.clicked.connect(self.onExploreTreeButtonClicked)
         self.manageCandidatesDialog = BatchAddDialog(self, word_length=self.word_length, title="Batch Add Candidates")
         self.managePicksDialog = BatchAddDialog(self, word_length=self.word_length, title="Batch Add Picks")
         self.manageCandidatesButton.clicked.connect(self.onManageCandidates)
@@ -71,6 +71,9 @@ class MainPreferences(QDialog, Ui_preferences):
         self.chartTreeButton.setEnabled(False)
         self.removeTreeButton.setEnabled(False)
 
+        # Initialize decisionTreeList actions
+        self.decisionTreeList.activated.connect(self.exploreTree)
+
         # Connect line editor signals
         self.initialPicksLineEdit.returnPressed.connect(self.addInitialPick)
         self.candidatesLineEdit.returnPressed.connect(self.addCandidate)
@@ -79,6 +82,10 @@ class MainPreferences(QDialog, Ui_preferences):
         self.chartTreeButton.clicked.connect(self.onChartTreeButtonClicked)
         self.profileComboBox.activated.connect(self.onProfileChanged)
         self.gameTypeComboBox.currentTextChanged.connect(self.profile_manager.changeGameType)
+        self.gameTypeComboBox.currentTextChanged.connect(self.profile_manager.changeGameType)
+        # Tentatively disable unsupported game mode options
+        self.gameTypeComboBox.model().item(1).setEnabled(False)
+        self.gameTypeComboBox.model().item(2).setEnabled(False)
         self.buttonBox.accepted.connect(self.onOK)
         self.buttonBox.rejected.connect(self.onCancel)
         self.buttonBox.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.onApply)
@@ -151,25 +158,27 @@ class MainPreferences(QDialog, Ui_preferences):
             counter += 1
         return name
 
-    @pyqtSlot(QItemSelection, QItemSelection)
-    def onInitialPicksListSelectionChanged(self, selected, deselected):
-        self.chartTreeButton.setEnabled(bool(selected))
+    @pyqtSlot(QModelIndex, QModelIndex)
+    def onInitialPicksListCurrentChanged(self, current: QModelIndex, previous: QModelIndex):
+        self.chartTreeButton.setEnabled(current.isValid())
 
-    @pyqtSlot(QItemSelection, QItemSelection)
-    def onDecisionTreeListSelectionChanged(self, selected, deselected):
-        self.removeTreeButton.setEnabled(bool(selected))
+    @pyqtSlot(QModelIndex, QModelIndex)
+    def onDecisionTreeListCurrentChanged(self, current: QModelIndex, previous: QModelIndex):
+        self.removeTreeButton.setEnabled(current.isValid())
+
 
     @pyqtSlot()
     def onChartTreeButtonClicked(self):
         logger.debug("onChartTreeButtonClicked started")
-        selected_indexes = self.initialPicksList.selectionModel().selectedIndexes()
+        selected_index = next(iter(self.initialPicksList.selectedIndexes()), None)
+        # selected_indexes = self.initialPicksList.selectedIndexes()
         model = self.initialPicksList.model()
 
-        if not selected_indexes:
+        if not selected_index:
             logger.debug("No word selected for decision tree generation")
             return
 
-        selected_index = next(iter(selected_indexes), None)
+        # selected_index = next(iter(selected_indexes), None)
         pick = model.data(selected_index)
 
         # Check if an editor is open and retrieve its text
@@ -192,8 +201,6 @@ class MainPreferences(QDialog, Ui_preferences):
 
     @pyqtSlot()
     def removeDecisionTree(self, text=None):
-        index = next(iter(self.decisionTreeList.selectedIndexes()), None)
-
         if not text:
             model = self.decisionTreeList.model()
             selected_index = next(iter(self.decisionTreeList.selectedIndexes()), None)
@@ -243,9 +250,9 @@ class MainPreferences(QDialog, Ui_preferences):
         self.word_length = profile.word_length
         logger.debug(f"setListModels: profile.picks={profile.picks}, profile.candidates={profile.candidates}")
         self.initialPicksList.setModel(profile.initial_picks)
-        self.initialPicksList.selectionModel().selectionChanged.connect(self.onInitialPicksListSelectionChanged)
+        self.initialPicksList.selectionModel().currentChanged.connect(self.onInitialPicksListCurrentChanged)
         self.decisionTreeList.setModel(profile.dt_model)
-        self.decisionTreeList.selectionModel().selectionChanged.connect(self.onDecisionTreeListSelectionChanged)
+        self.decisionTreeList.selectionModel().currentChanged.connect(self.onDecisionTreeListCurrentChanged)
         candidates_proxy = CandidatesProxy()
         candidates_proxy.setSourceModel(profile.model)
         self.candidatesList.setModel(candidates_proxy)
@@ -350,6 +357,11 @@ class MainPreferences(QDialog, Ui_preferences):
     @pyqtSlot()
     def removePick(self):
         selected_index = self.picksList.currentIndex()
+        self.setDisabled(True)
+        model = self.picksList.model()
+        model.rowsInserted.connect(lambda: self.setEnabled(True))
+        model.rowsRemoved.connect(lambda: self.setEnabled(True))
+        model.modelReset.connect(lambda: self.setEnabled(True))
         self.profile_manager.removePick(selected_index)
 
     @pyqtSlot()
@@ -510,30 +522,6 @@ class MainPreferences(QDialog, Ui_preferences):
         self.profile_manager.commitChanges()
         logger.debug("saveSettings completed")
 
-
-    @pyqtSlot()
-    def onManagePicks_old(self):
-        logger.debug("onManagePicks started")
-        profile = self.profile_manager.getCurrentProfile()
-        model = self.picksList.model()
-        original_words = sorted(word for word in model.get_picks() if word)
-        logger.debug(f"onManagePicks: Passing words to dialog: {len(original_words)} picks")
-        dialog = BatchAddDialog(self, words=original_words, word_length=self.word_length, title="Batch Add Picks")
-        if dialog.exec():
-            self.picksList.blockSignals(True)
-            model.blockSignals(True)
-            new_words = sorted(dialog.valid_words)
-            for word in original_words:
-                if word not in new_words:
-                    model.remove_pick_by_text(word)
-            model.batch_add_picks(new_words, is_candidate=False)
-            model.blockSignals(False)
-            self.picksList.blockSignals(False)
-            self.syncToProfile(self.profile_manager.getCurrentProfileName())
-            self.updateCountLabels()
-            logger.debug(f"onManagePicks: Added {len(new_words)} picks, Removed {len([w for w in original_words if w not in new_words])} picks")
-        logger.debug("onManagePicks completed")
-
     def onManagePicks(self):
 
         logger.debug("onManagePicks started")
@@ -637,20 +625,23 @@ class MainPreferences(QDialog, Ui_preferences):
 
         return root_item
 
-
-    @pyqtSlot()
-    def exploreTree(self):
-        logger.debug("exploreTree started")
+    def onExploreTreeButtonClicked(self):
         selected_index = next(iter(self.decisionTreeList.selectedIndexes()), None)
-        model = self.decisionTreeList.model()
+        self.exploreTree(selected_index)
 
-        if not selected_index:
+
+    @pyqtSlot(QModelIndex)
+    def exploreTree(self, index: QModelIndex):
+        logger.debug("exploreTree started")
+        if not index.isValid():
             logger.debug("No word selected for decision tree generation")
             return
 
+        model = self.decisionTreeList.model()
+
         # Check if an editor is open and retrieve its text
         profile = self.profile_manager.getCurrentProfile()
-        word = model.data(selected_index)
+        word = model.data(index)
         if word not in profile.dt or profile.dt[word] is None:
             logger.debug(f"No valid decision tree for '{word}'")
             return
