@@ -1,4 +1,4 @@
-from PyQt6.QtCore import pyqtSlot, pyqtSignal, QThread
+from PyQt6.QtCore import pyqtSlot, pyqtSignal, QThread, QObject
 from threading import Event
 from pathlib import Path
 from .tree_utils import routes_to_text, routes_to_dt
@@ -19,6 +19,52 @@ class SuggestionGetter(QThread):
         self.picks, self.strategic_picks, self.candidates = suggestions
         self.ready.emit()
 
+class SuggestionGetterX(QObject):
+    ready = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.picks = []
+        self.strategic_picks = []
+        self.candidates = []
+        # self._stop_event = Event()
+
+    def start(self):
+        suggestions = self.parent().guess.get_suggestions()
+        self.picks, self.strategic_picks, self.candidates = suggestions
+        # self.ready.emit()
+        # what if we emit the suggestions? think about that
+
+        QThread.currentThread().quit()
+
+        # self.thread = QThread()  # Create a QThread instance
+        # self.worker = Worker()    # Create a Worker instance
+        # self.worker.moveToThread(self.thread)  # Move Worker to the thread
+        
+        # # Connect signals
+        # self.worker.progress.connect(self.update_progress)
+        # self.worker.finished.connect(self.on_finished)
+        # self.thread.started.connect(self.worker.do_work)
+
+# class Worker(QObject):
+#     finished = pyqtSignal()  # Signal emitted when task is done
+#     progress = pyqtSignal(int)  # Optional: for reporting progress
+# 
+#     @pyqtSlot()
+#     def run(self):
+#         """Long-running task."""
+#         for i in range(5):
+#             sleep(1)  # Simulate work
+#             self.progress.emit(i + 1)
+#         
+#         # At the end, denote termination
+#         # Option 1: Emit signal (recommended)
+#         self.finished.emit()
+#         
+#         # Option 2: Directly quit the thread (works, but less flexible)
+#         # self.thread().quit()  # Or QThread.currentThread().quit()
+
+
 
 class DecisionTreeRoutesGetter(QThread):
     ready = pyqtSignal(str, object, bool)
@@ -30,7 +76,7 @@ class DecisionTreeRoutesGetter(QThread):
         self.guess_manager = guess_manager
         self.app_cache_path = profile_manager.app_cache_path()
         self.routes = []
-        self._stop_event = Event()
+        # self._stop_event = Event()
 
     def run(self):
         try:

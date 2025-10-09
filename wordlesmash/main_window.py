@@ -1,12 +1,13 @@
 from PyQt6.QtCore import pyqtSlot, QSettings
 from PyQt6.QtWidgets import QMainWindow
+from typing import List, Tuple
 from .ui_loader import load_ui_class, UI_CLASSES
 from .ui.wordlesmash_rc import qInitResources
 from .preferences import MainPreferences
 from .profile_manager import ProfileManager
 from .solver import DecisionTreeGuessManager
 from .dialogs import ProgressDialog
-from .workers import SuggestionGetter
+from .workers import SuggestionGetter, DecisionTreeRoutesGetter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,6 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.profile_manager = ProfileManager(self, self.settings)
         self.guessDisplay.setFocus()
         self.resetGuessManager()
-        self.onWordSubmitted()
         self.guessDisplay.wordSubmitted.connect(self.onWordSubmitted)
         self.guessDisplay.wordWithdrawn.connect(self.onWordWithdrawn)
         self.resetButton.clicked.connect(self.onResetGame)
@@ -48,20 +48,24 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.actionPreferences.triggered.connect(self.preferences_ui.show)
 
     def resetGuessManager(self):
+        dt = self.profile_manager.getDecisionTrees()
         self.guess = DecisionTreeGuessManager(
             self.profile_manager.getPicks(),
             self.profile_manager.getCandidates(),
-            self.profile_manager.getDecisionTrees(),
+            dt,
             length=self.profile_manager.getWordLength(),
             cache_path=self.profile_manager.app_cache_path()
         )
+        if not dt:
+            self.spawnInitialTreeRoutesGetter()
+        else:
+            self.onWordSubmitted()
 
     @pyqtSlot()
     def updateSuggestionLists(self):
         """This should be called when the suggestions are ready"""
 
         self.statusBar.showMessage('Suggestions ready!')
-        # self.resetButton.setEnabled(True)
         sender = self.sender()
 
         if isinstance(sender, SuggestionGetter):
@@ -109,21 +113,17 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.guessDisplay.setSubmitDisabled(True)
         self.guessDisplay.setWithdrawDisabled(True)
 
-
         # self.resetButton.setDisabled(True)
         self.statusBar.showMessage('Generating picks...')
         # self.key_ENTER.setDisabled(True)
         getter = SuggestionGetter(self)
-
         progress_dialog = ProgressDialog(self, cancel_callback=self.onCancelSearch)
-
         getter.finished.connect(self.updateSuggestionLists)
         getter.finished.connect(progress_dialog.close)
 
-        progress_dialog.show()
         self.setDisabled(True)
+        progress_dialog.show()
         getter.start()
-
 
     @pyqtSlot()
     def onCancelSearch(self):
@@ -143,14 +143,27 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         self.guess.reset()
         self.spawnSuggestionGetter()
 
-    def _on_load_finished(self):
-        ...
+    def spawnInitialTreeRoutesGetter(self):
+        """Start a DecisionTreeRoutesGetter thread to generate a near-otpimal
+        full root-to-leaf decision tree."""
+        
+        parent = self.parent()
 
-    def _initGuessManager(self):
-        ...
+        # Create a thread that will launch a search
+        self.setDisabled(True)
 
-    @pyqtSlot()
-    def updateGuessManager(self):
-        sender = self.sender()
-        if isinstance(sender, GuessManagerInitializer):
-            self.guess = sender.guess
+        getter = DecisionTreeRoutesGetter(self.profile_manager, None, self.guess, self)
+        progress_dialog = ProgressDialog(self, cancel_callback=getter.stop)
+        getter.ready.connect(self.updateInitialDecisionTree)
+        getter.finished.connect(progress_dialog.close)
+        progress_dialog.show()
+        getter.start()
+
+    def updateInitialDecisionTree(self, name: str, routes: List[Tuple[str]], success: bool):
+        """Add or update a decision tree in a profile."""
+        if success:
+            name = self.profile_manager.getCurrentProfileName()
+            self.profile_manager.addDecisionTree(name, routes, success)
+            self.profile_manager.commitChanges()
+            self.resetGuessManager()
+            self.setEnabled(True)

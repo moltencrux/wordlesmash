@@ -391,6 +391,7 @@ class ProfileManager(QObject):
                 self.saveProfile(name, profile)
         # Save default profile if changed
         current_default = self.settings.value("default_profile", defaultValue=None)
+        self._prev_profile = self.getCurrentProfileName()
         if self._default_profile != current_default:
             # Validate that _default_profile exists
             valid_profiles = set((*self.getProfileNames(), *self.modified.keys()))

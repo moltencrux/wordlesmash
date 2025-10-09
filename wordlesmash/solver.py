@@ -933,7 +933,7 @@ class DecisionTreeGuessManager(AbstractGuessManager):
 
         with self._stop_lock:
             if self._search_in_progress:
-                return None, None # is this right? or maybe error condition?
+                return None, None, None # is this right? or maybe error condition?
             else:
                 self._search_in_progress = True
 

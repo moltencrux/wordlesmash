@@ -279,7 +279,8 @@ class MainPreferences(QDialog, Ui_preferences):
         # I want to put up a busy dialog here, but loadProfile() blocks
         logger.debug(f"onProfileChanged: index={index}")
         self.loadProfileSettings(index)
-        self.parent().resetGuessManager()
+        # XXX why did we do this? I think this was when profile changes were committed immediately
+        # self.parent().resetGuessManager()
         self.setEnabled(True)
         QApplication.restoreOverrideCursor()
         logger.debug(f"Profile changed to index {index}, reset guess_manager")
@@ -289,7 +290,7 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug("onApply started")
         self.profile_manager.commitChanges()
         self.populateProfiles()
-        self.parent().resetGuessManager()
+        # self.parent().resetGuessManager()
         logger.debug("onApply completed")
 
     def updateDelegates(self):
@@ -399,7 +400,7 @@ class MainPreferences(QDialog, Ui_preferences):
         logger.debug("onOK started")
         self.onApply()
         self.parent().resetGuessManager()
-        self.parent().spawnSuggestionGetter()
+        # self.parent().spawnSuggestionGetter()
         self.accept()
         logger.debug("onOK completed")
 

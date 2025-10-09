@@ -101,6 +101,9 @@
               <height>32</height>
              </size>
             </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
             <property name="styleSheet">
              <string notr="true">border: none</string>
             </property>
@@ -2197,6 +2200,54 @@
     <hint type="destinationlabel">
      <x>126</x>
      <y>175</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>decisionTreeListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>setFocus()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>168</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>456</x>
+     <y>368</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>strategicListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>setFocus()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>380</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>456</x>
+     <y>368</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>solutionListWidget</sender>
+   <signal>itemActivated(QListWidgetItem*)</signal>
+   <receiver>guessDisplay</receiver>
+   <slot>setFocus()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>126</x>
+     <y>592</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>456</x>
+     <y>368</y>
     </hint>
    </hints>
   </connection>

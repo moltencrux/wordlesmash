@@ -291,13 +291,14 @@ class WordleTree():
         if not hasattr(self, 'clue_matrix'):
             self.clue_matrix = self.precompute_clues(all_picks, all_candidates)
 
-        try:
-            os.makedirs(os.path.split(filename)[0], exist_ok=True)
-            np.save(filename, self.clue_matrix)
-        except OSError as e:
-            logger.warning(dedent(f"""
-                           Warning: Unable to save matrix data.
-                           {format_exception_only(e)}""").strip())
+            # XXX fixed by indenting, remove this comment before commit
+            try:
+                os.makedirs(os.path.split(filename)[0], exist_ok=True)
+                np.save(filename, self.clue_matrix)
+            except OSError as e:
+                logger.warning(dedent(f"""
+                            Warning: Unable to save matrix data.
+                            {format_exception_only(e)}""").strip())
 
         self.dt = dt
 
@@ -822,7 +823,7 @@ class WordleTree():
 
     def gen_routes(self, pick, abort=None):
 
-        dt = {pick:{}}
+        dt = {pick:{}} if pick else {}
         routes = self.mod_dfs_beam_search(dt=dt, dt_depth=1, parallel=True,
                                           abort=abort)
         
