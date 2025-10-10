@@ -239,6 +239,7 @@ class MainPreferences(QDialog, Ui_preferences):
         self.setListModels()
         self.updateDelegates()
         self.updateEditors()
+        self.treeWidget.clear()
         logger.debug(f"Loaded profile settings: '{name}', word_length={self.word_length}, "
                     f"initial_picks={self.initialPicksList.model().rowCount()}, "
                     f"picks={self.picksList.model().rowCount()}, "
@@ -634,6 +635,8 @@ class MainPreferences(QDialog, Ui_preferences):
     @pyqtSlot(QModelIndex)
     def exploreTree(self, index: QModelIndex):
         logger.debug("exploreTree started")
+        # self.decisionTreeList.reset()
+        self.treeWidget.clear()
         if not index.isValid():
             logger.debug("No word selected for decision tree generation")
             return

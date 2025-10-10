@@ -70,7 +70,7 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
 
         if isinstance(sender, SuggestionGetter):
             picks = sender.picks
-            strategic_picks = sender.strategic_picks
+            contingency_solutions = sender.strategic_picks
             candidates = sender.candidates
         else:
             candidates = []
@@ -78,16 +78,13 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
             logging.debug("Empty or invalid routes generated")
 
         self.decisionTreeListWidget.clear()
-        self.strategicListWidget.clear()
+        self.contingencyListWidget.clear()
         self.solutionListWidget.clear()
         self.solutionCountLabel.setText(f'({len(candidates)})')
         if candidates:
-            for s in picks:
-                self.decisionTreeListWidget.addItem(s)
-            for c in sorted([]):
-                self.strategicListWidget.addItem(c)
-            for c in sorted(candidates):
-                self.solutionListWidget.addItem(c)
+            self.decisionTreeListWidget.addItems(picks)
+            self.contingencyListWidget.addItems(contingency_solutions)
+            self.solutionListWidget.addItems(candidates)
         if self.solutionListWidget.count() > 1:
             self.guessDisplay.setSubmitEnabled(True)
             # self.key_ENTER.setEnabled(True)

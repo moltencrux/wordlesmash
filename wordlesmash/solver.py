@@ -161,6 +161,7 @@ class GuessFilter:
         self._qty_mins = {c: 0 for c in ascii_uppercase}
         # self.components = [0] * length
         self.picks = {word:word for word in lexicon} if lexicon else {}
+        self._all_picks = set(self.picks.keys())
         # This will be a dictionary of picks that will give a distinct result
         # if guessed. Equivalent guesses (i.e. disseparate guesses that will
         # produce the same updated filter state will be folded together.
@@ -250,11 +251,6 @@ class GuessFilter:
 
     def get_qty_min(self, c):
         return self.letters.get(c, 0)
-
-    # def get_component(self, c):
-    #     index = self.viable[c].find(True)
-    #     return self.components[index]
-    #     # careful/bc a single letter could be in multiple CCs
 
     def get_qty_max(self, c):
         """
@@ -836,8 +832,8 @@ class GuessFilter:
 
         return slot_colors
 
-
-
+    def get_valid_contingency_solutions(self):
+        return list(filter(self.guess_valid, self._all_picks.difference(self.candidates)))
 
 class AbstractGuessManager(metaclass=ABCMeta):
 
@@ -860,6 +856,7 @@ class AbstractGuessManager(metaclass=ABCMeta):
 class DecisionTreeGuessManager(AbstractGuessManager):
     def __init__(self, lexicon, candidates, dt=None, length=5, cache_path=None):
         # self.tree = read_decision_tree_set(filename)
+        self.length = length
         if isinstance(lexicon, (str, PosixPath)):
             lexicon = [w for w in load_word_list(lexicon) if len(w) == length]
         self.lexicon = tuple(sorted(set(lexicon)))
@@ -907,7 +904,7 @@ class DecisionTreeGuessManager(AbstractGuessManager):
         # self.state = []
         self.pick_word_hist = []
         self.clue_color_hist = []
-        self.filter = GuessFilter()
+        self.filter = GuessFilter(self.length, self.lexicon, self.candidates)
 
     def update_guess_result(self, word=None, colors=None):
         if word and colors:
@@ -923,7 +920,7 @@ class DecisionTreeGuessManager(AbstractGuessManager):
         else:
             ...
 
-        new_filter = GuessFilter()
+        new_filter = GuessFilter(self.length, self.lexicon, self.candidates)
         for word, colors in zip(self.pick_word_hist, self.clue_color_hist):
             new_filter.update_guess_result(word, colors)
 
@@ -964,7 +961,9 @@ class DecisionTreeGuessManager(AbstractGuessManager):
             self._search_in_progress = False
             self._stop_event = multiprocessing.Event()
 
-        return suggestions, [], rem_candidates
+        contingency_solutions = self.filter.get_valid_contingency_solutions()
+
+        return suggestions, contingency_solutions, rem_candidates
 
     def regenerate_tree(self):
 

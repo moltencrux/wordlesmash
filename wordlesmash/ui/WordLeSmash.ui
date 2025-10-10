@@ -410,15 +410,15 @@
           <number>2</number>
          </property>
          <item>
-          <widget class="QLabel" name="strategicLabel">
+          <widget class="QLabel" name="contingencyLabel">
            <property name="toolTip">
-            <string>Picks that are highly effective at narrowing the pool of solution candidates based on heuristic analysis, though not as optimized as Charted Tree Picks.</string>
+            <string>These are backup solutions if it turns out the actual solution was not in your candidate list. You can try one of these if there are no valid solutions left to try.</string>
            </property>
            <property name="layoutDirection">
             <enum>Qt::LayoutDirection::LeftToRight</enum>
            </property>
            <property name="text">
-            <string>Strategic Picks</string>
+            <string>Contingency Picks</string>
            </property>
            <property name="scaledContents">
             <bool>false</bool>
@@ -429,7 +429,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QListWidget" name="strategicListWidget">
+          <widget class="QListWidget" name="contingencyListWidget">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
              <horstretch>0</horstretch>
@@ -1484,7 +1484,7 @@
  </resources>
  <connections>
   <connection>
-   <sender>strategicListWidget</sender>
+   <sender>contingencyListWidget</sender>
    <signal>itemDoubleClicked(QListWidgetItem*)</signal>
    <receiver>guessDisplay</receiver>
    <slot>onListItemSelected(QListWidgetItem*)</slot>
@@ -1516,7 +1516,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>strategicListWidget</sender>
+   <sender>contingencyListWidget</sender>
    <signal>itemActivated(QListWidgetItem*)</signal>
    <receiver>solutionListWidget</receiver>
    <slot>clearSelection()</slot>
@@ -1534,7 +1534,7 @@
   <connection>
    <sender>solutionListWidget</sender>
    <signal>itemActivated(QListWidgetItem*)</signal>
-   <receiver>strategicListWidget</receiver>
+   <receiver>contingencyListWidget</receiver>
    <slot>clearSelection()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -1548,7 +1548,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>strategicListWidget</sender>
+   <sender>contingencyListWidget</sender>
    <signal>itemClicked(QListWidgetItem*)</signal>
    <receiver>solutionListWidget</receiver>
    <slot>clearSelection()</slot>
@@ -1566,7 +1566,7 @@
   <connection>
    <sender>solutionListWidget</sender>
    <signal>itemClicked(QListWidgetItem*)</signal>
-   <receiver>strategicListWidget</receiver>
+   <receiver>contingencyListWidget</receiver>
    <slot>clearSelection()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -2110,7 +2110,7 @@
   <connection>
    <sender>decisionTreeListWidget</sender>
    <signal>itemActivated(QListWidgetItem*)</signal>
-   <receiver>strategicListWidget</receiver>
+   <receiver>contingencyListWidget</receiver>
    <slot>clearSelection()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -2126,7 +2126,7 @@
   <connection>
    <sender>decisionTreeListWidget</sender>
    <signal>itemClicked(QListWidgetItem*)</signal>
-   <receiver>strategicListWidget</receiver>
+   <receiver>contingencyListWidget</receiver>
    <slot>clearSelection()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -2140,7 +2140,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>strategicListWidget</sender>
+   <sender>contingencyListWidget</sender>
    <signal>itemActivated(QListWidgetItem*)</signal>
    <receiver>decisionTreeListWidget</receiver>
    <slot>clearSelection()</slot>
@@ -2156,7 +2156,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>strategicListWidget</sender>
+   <sender>contingencyListWidget</sender>
    <signal>itemClicked(QListWidgetItem*)</signal>
    <receiver>decisionTreeListWidget</receiver>
    <slot>clearSelection()</slot>
@@ -2220,7 +2220,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>strategicListWidget</sender>
+   <sender>contingencyListWidget</sender>
    <signal>itemActivated(QListWidgetItem*)</signal>
    <receiver>guessDisplay</receiver>
    <slot>setFocus()</slot>

@@ -311,6 +311,9 @@
                        <verstretch>0</verstretch>
                       </sizepolicy>
                      </property>
+                     <property name="toolTip">
+                      <string>This is the list of all possible solutions candidates</string>
+                     </property>
                      <property name="text">
                       <string>Solution Candidates</string>
                      </property>
@@ -437,6 +440,9 @@
                        <horstretch>0</horstretch>
                        <verstretch>0</verstretch>
                       </sizepolicy>
+                     </property>
+                     <property name="toolTip">
+                      <string>This is a list of all allowed picks, typically a superset of the candidate solutions</string>
                      </property>
                      <property name="text">
                       <string>Allowed Picks</string>
@@ -659,6 +665,9 @@
                      <verstretch>0</verstretch>
                     </sizepolicy>
                    </property>
+                   <property name="toolTip">
+                    <string>A list of preferred starting picks for which you may want to generate decision trees. Decision trees with starting picks that get invalidated due to candidate/pick set changes will revert to initial picks.</string>
+                   </property>
                    <property name="text">
                     <string>Initial Picks</string>
                    </property>
@@ -758,6 +767,9 @@
                      <horstretch>0</horstretch>
                      <verstretch>0</verstretch>
                     </sizepolicy>
+                   </property>
+                   <property name="toolTip">
+                    <string>This is a list of all decision trees that have been optimally charted for the candidates and picks in the current profile</string>
                    </property>
                    <property name="text">
                     <string>Charted Decison Trees</string>

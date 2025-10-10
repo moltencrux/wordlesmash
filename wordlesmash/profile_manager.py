@@ -354,7 +354,6 @@ class ProfileManager(QObject):
             profile.dt_model.remove_pick_by_text(word)
             logger.debug(f"Marked decision tree {word} for deletion in profile {profile_name}")
 
-    # def addDecisionTree(self, name: str, tree_data: Dict[str, Optional[dict]]):
     def addDecisionTree(self, name: str, routes: List[Tuple[str]], success: bool):
         """Add or update a decision tree in a profile."""
         if success:
