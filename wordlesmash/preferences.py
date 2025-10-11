@@ -18,6 +18,7 @@ from .workers import DecisionTreeRoutesGetter
 from .models import PicksModel, CandidatesProxy, ValidatedProxy
 import logging
 import time
+from copy import deepcopy
 
 logger = logging.getLogger(__name__)
 
@@ -500,7 +501,8 @@ class MainPreferences(QDialog, Ui_preferences):
         source_profile = self.profileComboBox.itemData(current_index, Qt.ItemDataRole.UserRole)
         new_name = self.getUniqueProfileName(f"Copy of {source_profile}")
         logger.debug(f"Copying profile {source_profile} to {new_name}")
-        profile = self.profile_manager.loadProfile(source_profile)
+        profile = deepcopy(self.profile_manager.loadProfile(source_profile))
+        profile.saved_name = None
         profile.dirty = True
         self.profile_manager.modified[new_name] = profile
         self.profile_manager.setCurrentProfile(new_name)

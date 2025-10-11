@@ -361,6 +361,9 @@
            <property name="midLineWidth">
             <number>1</number>
            </property>
+           <property name="sortingEnabled">
+            <bool>true</bool>
+           </property>
           </widget>
          </item>
         </layout>
@@ -468,6 +471,9 @@
            </property>
            <property name="midLineWidth">
             <number>1</number>
+           </property>
+           <property name="sortingEnabled">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
@@ -589,6 +595,9 @@
            </property>
            <property name="midLineWidth">
             <number>1</number>
+           </property>
+           <property name="sortingEnabled">
+            <bool>true</bool>
            </property>
           </widget>
          </item>

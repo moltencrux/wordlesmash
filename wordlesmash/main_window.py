@@ -117,6 +117,7 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         progress_dialog = ProgressDialog(self, cancel_callback=self.onCancelSearch)
         getter.finished.connect(self.updateSuggestionLists)
         getter.finished.connect(progress_dialog.close)
+        getter.finished.connect(self.guessDisplay.setFocus)
 
         self.setDisabled(True)
         progress_dialog.show()
@@ -153,6 +154,7 @@ class MainWordLeSmashWindow(QMainWindow, Ui_MainWindow):
         progress_dialog = ProgressDialog(self, cancel_callback=getter.stop)
         getter.ready.connect(self.updateInitialDecisionTree)
         getter.finished.connect(progress_dialog.close)
+        getter.finished.connect(self.guessDisplay.setFocus)
         progress_dialog.show()
         getter.start()
 
