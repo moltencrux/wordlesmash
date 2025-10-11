@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
     QItemDelegate, QListWidgetItem, QMessageBox, QTreeWidgetItem, QListView,
     QApplication
 )
-from PyQt6.QtGui import QIcon, QCloseEvent
+from PyQt6.QtGui import QIcon, QCloseEvent, QPixmap
 from .ui_loader import load_ui_class, UI_CLASSES, pathhelper
 from .solver import DecisionTreeGuessManager
 from .dialogs import ProgressDialog, BatchAddDialog, NewProfileDialog
@@ -32,6 +32,14 @@ class MainPreferences(QDialog, Ui_preferences):
         self.word_length = 5
         self.guess_manager = None
         self.default_icon = QIcon.fromTheme("emblem-default", QIcon())  # Fallback to empty icon
+        # Create blank_icon with transparent pixmaps for all default_icon sizes
+        self.blank_icon = QIcon()
+        icon_sizes = self.default_icon.availableSizes() or [QSize(16, 16)]  # Fallback to 16x16 if none
+        logger.debug(f"MainPreferences.__init__: default_icon sizes={icon_sizes}")
+        for size in icon_sizes:
+            pixmap = QPixmap(size)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            self.blank_icon.addPixmap(pixmap)
         self.initUI()
         self.loadSettings()
         logger.debug("MainPreferences.__init__ completed")
@@ -82,6 +90,7 @@ class MainPreferences(QDialog, Ui_preferences):
 
         self.chartTreeButton.clicked.connect(self.onChartTreeButtonClicked)
         self.profileComboBox.activated.connect(self.onProfileChanged)
+        self.profileComboBox.installEventFilter(self)
         self.gameTypeComboBox.currentTextChanged.connect(self.profile_manager.changeGameType)
         self.gameTypeComboBox.currentTextChanged.connect(self.profile_manager.changeGameType)
         # Tentatively disable unsupported game mode options
@@ -107,24 +116,26 @@ class MainPreferences(QDialog, Ui_preferences):
             logger.debug("Esc key pressed in MainPreferences, triggering close")
             self.close()
             return
-        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            if self.profileComboBox.hasFocus() or self.profileComboBox.lineEdit().hasFocus():
+        elif self.profileComboBox.hasFocus() or self.profileComboBox.lineEdit().hasFocus():
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self.renameProfile()
                 event.accept()
                 return
-            # elif self.initialPicksLineEdit.hasFocus():
-            #     logger.debug("MainPreferences.keyPressEvent: Enter pressed in initialPicksLineEdit, handling via addInitialPick")
-            #     # self.addInitialPick()...
-            #     event.accept() # Is this to prevent closing? why would we see it if the child gets it?
-            #     return
+            elif event.key() in (Qt.Key.Key_PageUp, Qt.Key.Key_PageDown, Qt.Key.Key_Up, Qt.Key.Key_Down):
+                event.ignore()  # Ignore the event
+
         super().keyPressEvent(event)
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.Type.KeyPress and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            if obj == self.profileComboBox.lineEdit():
-                logger.debug("MainPreferences.eventFilter: Enter pressed in profileComboBox.lineEdit, renaming profile")
-                self.renameProfile()
-                return True
+        if event.type() == QEvent.Type.KeyPress:
+            if obj in (self.profileComboBox, self.profileComboBox.lineEdit()):
+                if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                    logger.debug("MainPreferences.eventFilter: Enter pressed in profileComboBox.lineEdit, renaming profile")
+                    self.renameProfile()
+                    return True
+                elif event.key() in (Qt.Key.Key_PageUp, Qt.Key.Key_PageDown, Qt.Key.Key_Up, Qt.Key.Key_Down):
+                    event.ignore
+                    return True
         return super().eventFilter(obj, event)
 
     def closeEvent(self, event):
@@ -512,7 +523,7 @@ class MainPreferences(QDialog, Ui_preferences):
             index = self.profileComboBox.count() - 1
             self.profileComboBox.setCurrentIndex(index)
             default_profile = self.profile_manager.getDefaultProfile()
-            self.profileComboBox.setItemIcon(index, self.default_icon if new_name == default_profile else QIcon())
+            self.profileComboBox.setItemIcon(index, self.default_icon if new_name == default_profile else self.blank_icon)
             logger.debug(f"Added copied profile {new_name} to QComboBox at index {index}")
         finally:
             self.profileComboBox.blockSignals(False)
@@ -664,10 +675,9 @@ class MainPreferences(QDialog, Ui_preferences):
         default_profile = self.profile_manager.getDefaultProfile()
         for name in sorted(self.profile_manager.getProfileNames()):
             self.profileComboBox.addItem(name, userData=name)
-            if name == default_profile:
-                index = self.profileComboBox.findData(name, Qt.ItemDataRole.UserRole)
-                if index >= 0:
-                    self.profileComboBox.setItemIcon(index, self.default_icon)
+            index = self.profileComboBox.findData(name, Qt.ItemDataRole.UserRole)
+            if index >= 0:
+                self.profileComboBox.setItemIcon(index, self.default_icon if name == default_profile else self.blank_icon)
         if current_profile:
             index = self.profileComboBox.findData(current_profile, Qt.ItemDataRole.UserRole)
             if index >= 0:

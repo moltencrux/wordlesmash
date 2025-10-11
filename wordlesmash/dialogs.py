@@ -96,6 +96,10 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
         self.timer.start(400)  # Start the timer with a 500 ms interval
         logger.debug("ProgressDialog initialized, timer started")
 
+        # self.timer = QTimer(self)
+        # self.timer.setSingleShot(True)  # Ensure it only runs once
+
+
     def initUI(self):
         self.setupUi(self)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoTitleBarBackgroundHint)
@@ -143,3 +147,9 @@ class ProgressDialog(QDialog, Ui_ProgressDialog):
         except AttributeError as e:
             logger.error(f"ProgressDialog spinner not properly initialized: {e}")
         super().closeEvent(event)
+
+    def showDelayed(self, delay=500):
+        """Show the dialog after a specified delay if it's not already visible."""
+        if not self.isVisible():  # Check if the dialog is not already shown
+            self.timer.timeout.connect(self.show)
+            self.timer.start(delay)
